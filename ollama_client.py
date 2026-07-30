@@ -79,7 +79,18 @@ def chamar_agente(
 
             resp = sessao.post(ZEN_API_URL, json=payload, timeout=ZEN_TIMEOUT)
             resp.raise_for_status()
-            texto_resposta = resp.json()["choices"][0]["message"]["content"]
+            data = resp.json()
+            texto_resposta = (
+                data.get("output", [{}])[0]
+                .get("content", [{}])[0]
+                .get("text", "")
+            )
+            if not texto_resposta:
+                texto_resposta = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
 
             dados_validados = extrair_e_validar_json(texto_resposta)
             esquema_pydantic(**dados_validados)
