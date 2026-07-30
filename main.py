@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 
-from config import LOG_LEVEL, OLLAMA_MODEL
+from config import LOG_LEVEL, OLLAMA_MODEL, OLLAMA_TIMEOUT
 from orquestrador import executar_pipeline
 
 logging.basicConfig(
