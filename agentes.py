@@ -33,9 +33,8 @@ AGENTE_3_PESQUISADOR = (
 )
 
 AGENTE_4_EXECUTOR = (
-    "Voce e o Agente 4 (Executor). Escreva o codigo em Python "
-    "com no maximo 15 linhas e 400 caracteres. Apenas o essencial. "
-    "O projeto e um backend Python com FastAPI + LangChain. "
+    "Voce e o Agente 4 (Executor). Escreva o codigo em Python. "
+    "Apenas o essencial. "
     "Responda APENAS com JSON puro, sem comentarios ou explicacoes, "
     "usando exatamente este schema:\n"
     '{"rascunho_da_solucao": "codigo aqui"}'

@@ -81,6 +81,29 @@ def _log_progress(modelo: str, tentativa: int, total: int, stop: threading.Event
     print("\r" + " " * 60 + "\r", end="", file=sys.stderr, flush=True)
 
 
+def _enviar_e_extrair(
+    sessao: requests.Session,
+    payload: dict,
+    modelo: str,
+    tentativa: int,
+    total: int,
+) -> str:
+    stop = threading.Event()
+    t = threading.Thread(
+        target=_log_progress, args=(modelo, tentativa, total, stop), daemon=True,
+    )
+    t.start()
+    try:
+        resp = sessao.post(ZEN_API_URL, json=payload, timeout=(30, 600))
+        resp.raise_for_status()
+        raw = resp.json()
+        if not isinstance(raw, dict):
+            raise ValueError(f"Resposta nao e dict: {type(raw).__name__}")
+        return _extrair_texto(raw)
+    finally:
+        stop.set()
+
+
 def chamar_agente(
     prompt_sistema: str,
     entrada_usuario: str,
@@ -114,37 +137,33 @@ def chamar_agente(
                 "max_tokens": 16384,
             }
 
-            stop_watchdog = threading.Event()
-            watchdog = threading.Thread(
-                target=_log_progress,
-                args=(ZEN_MODEL, tentativa + 1, max_tentativas, stop_watchdog),
-                daemon=True,
-            )
-            watchdog.start()
-
-            try:
-                resp = sessao.post(
-                    ZEN_API_URL, json=payload, timeout=(30, 600)
-                )
-                resp.raise_for_status()
-            finally:
-                stop_watchdog.set()
-
-            raw_resp = resp.json()
             if VERBOSE_MODE:
                 logger.info(
                     "--- PAYLOAD ENVIADO ---\n%s",
                     json.dumps(payload, indent=2, ensure_ascii=False),
                 )
-                logger.info(
-                    "--- RESPOSTA RECEBIDA ---\n%s",
-                    json.dumps(raw_resp, indent=2, ensure_ascii=False),
-                )
 
-            texto_resposta = _extrair_texto(raw_resp)
+            texto_resposta = _enviar_e_extrair(
+                sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas,
+            )
 
             if not texto_resposta:
-                raise ValueError("Resposta vazia da API Zen")
+                logger.warning(
+                    "Resposta vazia. Auto-retry com temperature=0.2..."
+                )
+                payload["temperature"] = 0.2
+                texto_resposta = _enviar_e_extrair(
+                    sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas,
+                )
+
+            if not texto_resposta:
+                raise ValueError("Resposta vazia da API Zen (mesmo apos auto-retry)")
+
+            if VERBOSE_MODE:
+                logger.info(
+                    "--- RESPOSTA RECEBIDA ---\n%s",
+                    texto_resposta,
+                )
 
             dados_validados = extrair_e_validar_json(texto_resposta)
             esquema_pydantic(**dados_validados)
