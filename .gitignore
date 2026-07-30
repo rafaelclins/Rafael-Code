@@ -1,0 +1,45 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# --- Virtual Environment ---
+.venv/
+venv/
+env/
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+Thumbs.db
+.DS_Store
+
+# --- Ollama ---
+.ollama/
+
+# --- Execution artifacts ---
+*.log
+.history/
+output/
+temp/
+tmp/
+
+# --- Local personal scripts (contain absolute paths with username) ---
+meus_agentes.bat
+rafael_code.bat

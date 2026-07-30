@@ -1,0 +1,15 @@
+import os
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
+
+MAX_TENTATIVAS_MODELO = int(os.getenv("MAX_TENTATIVAS_MODELO", "3"))
+MAX_REPROVACAO_QUALIDADE = int(os.getenv("MAX_REPROVACAO_QUALIDADE", "3"))
+MAX_REPROVACAO_SEGURANCA = int(os.getenv("MAX_REPROVACAO_SEGURANCA", "2"))
+
+TEMPERATURA_INICIAL = float(os.getenv("TEMPERATURA_INICIAL", "0.1"))
+TEMPERATURA_INCREMENTO = float(os.getenv("TEMPERATURA_INCREMENTO", "0.2"))
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

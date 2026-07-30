@@ -1,0 +1,5 @@
+@echo off
+set "ORIGINAL_DIR=%CD%"
+cd /d "C:\caminho\para\Rafael-Code"
+"C:\caminho\para\python.exe" main.py --diretorio "%ORIGINAL_DIR%"
+cd /d "%ORIGINAL_DIR%"
