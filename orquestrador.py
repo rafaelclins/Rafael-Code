@@ -41,6 +41,12 @@ def _ler_contexto_repositorio(max_caracteres: int = 1000) -> str:
     return contexto[:max_caracteres]
 
 
+def _limitar(texto: str, max_caracteres: int) -> str:
+    if len(texto) <= max_caracteres:
+        return texto
+    return texto[:max_caracteres] + "\n\n...[TRUNCADO]"
+
+
 def _safe_print(texto: str) -> None:
     try:
         print(texto)
@@ -100,12 +106,13 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
             f"CICLO DE QUALIDADE {tentativas_qualidade + 1}/{MAX_REPROVACAO_QUALIDADE}"
         )
 
-        entrada_planejador = str(dados_agente_1)
+        entrada_planejador = _limitar(str(dados_agente_1), 2000)
         if feedback_qualidade:
             entrada_planejador += (
                 f"\n[CORRECAO OBRIGATORIA]: O avaliador reprovou o ciclo anterior "
                 f"pelo motivo: {feedback_qualidade}"
             )
+            entrada_planejador = _limitar(entrada_planejador, 2500)
             _safe_print(f"  Feedback de correcao injetado: {feedback_qualidade[:100]}...")
 
         _print_agente(2, "PLANEJADOR (Planner)")
@@ -129,7 +136,9 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
         _safe_print(f"  Fontes coletadas: {num_dados}")
 
         _print_agente(4, "EXECUTOR ESPECIALISTA")
-        entrada_executor = f"PLANO:\n{dados_agente_2}\n\nPESQUISA:\n{dados_agente_3}"
+        entrada_executor = _limitar(
+            f"PLANO:\n{dados_agente_2}\n\nPESQUISA:\n{dados_agente_3}", 3000
+        )
         dados_agente_4 = chamar_agente(
             AGENTE_4_EXECUTOR, entrada_executor, ExecutorOutput
         )
@@ -138,8 +147,8 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
         _safe_print(f"  Rascunho gerado: {tamanho} caracteres")
 
         _print_agente(5, "CONSOLIDADOR (Synthesizer)")
-        entrada_consolidador = (
-            f"PLANO:\n{dados_agente_2}\n\nCODIGO GERADO:\n{dados_agente_4}"
+        entrada_consolidador = _limitar(
+            f"PLANO:\n{dados_agente_2}\n\nCODIGO GERADO:\n{dados_agente_4}", 3000
         )
         dados_agente_5 = chamar_agente(
             AGENTE_5_CONSOLIDADOR, entrada_consolidador, ConsolidadorOutput
@@ -150,7 +159,7 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
 
         _print_agente(6, "AVALIADOR / CRITICO (QA)")
         resultado_agente_6 = chamar_agente(
-            AGENTE_6_AVALIADOR, documento_atual, AvaliadorOutput
+            AGENTE_6_AVALIADOR, _limitar(documento_atual, 3000), AvaliadorOutput
         )
         logger.info("Agente 6 (Avaliador) concluido: %s", resultado_agente_6["status"])
         _safe_print(f"  Status: {resultado_agente_6['status']}")
@@ -199,9 +208,10 @@ def _loop_seguranca(documento: str) -> str | None:
 
         if feedback_seguranca:
             _safe_print("  Consolidador corrigindo por seguranca...")
-            entrada_consolidador = (
+            entrada_consolidador = _limitar(
                 f"DOCUMENTO ATUAL:\n{documento_atual}\n\n"
-                f"FEEDBACK DE SEGURANCA:\n{feedback_seguranca}"
+                f"FEEDBACK DE SEGURANCA:\n{feedback_seguranca}",
+                3000,
             )
             resultado_refeito = chamar_agente(
                 AGENTE_5_REFAZ_POR_SEGURANCA, entrada_consolidador, ConsolidadorOutput
@@ -211,7 +221,7 @@ def _loop_seguranca(documento: str) -> str | None:
 
         _print_agente(7, "GUARDIAO DE SEGURANCA (Guardrail)")
         resultado_agente_7 = chamar_agente(
-            AGENTE_7_GUARDIAO, documento_atual, GuardiaoOutput
+            AGENTE_7_GUARDIAO, _limitar(documento_atual, 3000), GuardiaoOutput
         )
         logger.info(
             "Agente 7 (Guardiao) concluido: %s",
@@ -226,10 +236,11 @@ def _loop_seguranca(documento: str) -> str | None:
 
         politica = resultado_agente_7.get("politica_violada", "desconhecida")
         _safe_print(f"  Politica violada: {politica}")
-        feedback_seguranca = (
+        feedback_seguranca = _limitar(
             f"CORRECAO DE SEGURANCA: {politica}. "
             f"Detalhes: {resultado_agente_7['resposta_final_higienizada']}. "
-            f"Remova ou reescreva o trecho violador."
+            f"Remova ou reescreva o trecho violador.",
+            2000,
         )
         logger.warning("Seguranca BLOQUEADO: %s", politica)
         tentativas += 1
