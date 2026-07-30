@@ -35,8 +35,12 @@ O modelo **1.5B** oferece o melhor custo-benefício para desenvolvimento local: 
 
 ## 🧠 Arquitetura dos 7 Agentes
 
+
+
+
 <img width="1344" height="2306" alt="fluxograma-pipeline" src="https://github.com/user-attachments/assets/77e74239-c5ba-4b09-aadf-3ae51a3cb234" />
-)
+
+
 
 
 ### Agente 1 — Alinhador (Orchestrator)
