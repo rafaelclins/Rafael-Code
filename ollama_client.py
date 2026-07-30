@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -8,10 +7,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from config import (
-    OLLAMA_HOST,
-    OLLAMA_KEEP_ALIVE,
-    OLLAMA_MODEL,
-    OLLAMA_TIMEOUT,
+    ZEN_API_KEY,
+    ZEN_API_URL,
+    ZEN_MODEL,
+    ZEN_TIMEOUT,
     TEMPERATURA_INCREMENTO,
     TEMPERATURA_INICIAL,
     MAX_TENTATIVAS_MODELO,
@@ -40,18 +39,10 @@ def criar_sessao() -> requests.Session:
     adapter = HTTPAdapter(max_retries=retries)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
+    session.headers.update({"Content-Type": "application/json"})
+    if ZEN_API_KEY:
+        session.headers.update({"Authorization": f"Bearer {ZEN_API_KEY}"})
     return session
-
-
-def aquecer_modelo(sessao: requests.Session) -> None:
-    url = f"{OLLAMA_HOST}/api/generate"
-    try:
-        payload = {"model": OLLAMA_MODEL, "prompt": "ok", "keep_alive": OLLAMA_KEEP_ALIVE}
-        resp = sessao.post(url, json=payload, timeout=30)
-        resp.raise_for_status()
-        logger.info("Modelo aquecido (keep_alive=%s)", OLLAMA_KEEP_ALIVE)
-    except Exception as e:
-        logger.warning("Falha ao aquecer modelo (nao critico): %s", e)
 
 
 def chamar_agente(
@@ -66,7 +57,6 @@ def chamar_agente(
     if temperatura is None:
         temperatura = TEMPERATURA_INICIAL
 
-    url = f"{OLLAMA_HOST}/api/chat"
     sessao = criar_sessao()
     ultimo_erro = ""
 
@@ -74,24 +64,22 @@ def chamar_agente(
         temp_atual = temperatura + (tentativa * TEMPERATURA_INCREMENTO)
         logger.debug(
             "Tentativa %d/%d | temp=%.2f | modelo=%s",
-            tentativa + 1, max_tentativas, temp_atual, OLLAMA_MODEL,
+            tentativa + 1, max_tentativas, temp_atual, ZEN_MODEL,
         )
 
         try:
             payload = {
-                "model": OLLAMA_MODEL,
+                "model": ZEN_MODEL,
                 "messages": [
                     {"role": "system", "content": prompt_sistema},
                     {"role": "user", "content": f"Dados de Entrada:\n{entrada_usuario}"},
                 ],
-                "stream": False,
-                "options": {"temperature": temp_atual},
-                "format": esquema_pydantic.model_json_schema(),
+                "temperature": temp_atual,
             }
 
-            resp = sessao.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
+            resp = sessao.post(ZEN_API_URL, json=payload, timeout=ZEN_TIMEOUT)
             resp.raise_for_status()
-            texto_resposta = resp.json()["message"]["content"]
+            texto_resposta = resp.json()["choices"][0]["message"]["content"]
 
             dados_validados = extrair_e_validar_json(texto_resposta)
             esquema_pydantic(**dados_validados)
@@ -108,7 +96,17 @@ def chamar_agente(
             ultimo_erro = f"HTTP {status} na tentativa {tentativa + 1}: {e}"
             logger.warning(ultimo_erro)
             if status in (400, 404):
-                raise ErroModelo(f"Ollama retornou {status}. Verifique se o modelo '{OLLAMA_MODEL}' existe. Detalhe: {e}", tentativa)
+                raise ErroModelo(
+                    f"API Zen retornou {status}. Verifique a URL '{ZEN_API_URL}' "
+                    f"e a chave de API. Detalhe: {e}",
+                    tentativa,
+                )
+            if status == 401:
+                raise ErroModelo(
+                    "API Zen retornou 401 (Nao Autorizado). "
+                    "Verifique se a variavel OPENCODE_ZEN_KEY esta definida corretamente.",
+                    tentativa,
+                )
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
 

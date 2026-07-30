@@ -1,9 +1,9 @@
 import os
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
-OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
+ZEN_API_KEY = os.getenv("OPENCODE_ZEN_KEY", "")
+ZEN_API_URL = os.getenv("ZEN_API_URL", "https://opencode.ai/zen/v1/responses")
+ZEN_MODEL = os.getenv("ZEN_MODEL", "big-pickle")
+ZEN_TIMEOUT = int(os.getenv("ZEN_TIMEOUT", "600"))
 
 MAX_TENTATIVAS_MODELO = int(os.getenv("MAX_TENTATIVAS_MODELO", "1"))
 MAX_REPROVACAO_QUALIDADE = int(os.getenv("MAX_REPROVACAO_QUALIDADE", "3"))

@@ -1,35 +1,36 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.12%2B-blue?style=for-the-badge&logo=python" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/Ollama-Qwen%202.5%20Coder%201.5B-8A2BE2?style=for-the-badge&logo=ollama" alt="Ollama Qwen 2.5 Coder">
+  <img src="https://img.shields.io/badge/OpenCode%20Zen-Big%20Pickle-8A2BE2?style=for-the-badge&logo=openai" alt="OpenCode Zen Big Pickle">
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License">
 </p>
 
 <h1 align="center">🤖 Rafael Code</h1>
 <p align="center">
-  <em>Assistente multiagente de engenharia de software — 100% local, 100% open-source.</em>
+  <em>Assistente multiagente de engenharia de software — cloud ou local, 100% open-source.</em>
 </p>
 
 ---
 
 ## 📖 Introdução
 
-**Rafael Code** é um sistema multiagente inspirado no Claude Code da Anthropic, projetado para executar pipelines completos de engenharia de software usando modelos de linguagem locais via Ollama.
+**Rafael Code** é um sistema multiagente inspirado no Claude Code da Anthropic, projetado para executar pipelines completos de engenharia de software usando modelos de linguagem.
 
-Diferente de soluções proprietárias que exigem internet e pagamento por token, o Rafael Code roda **integralmente na sua máquina** — sem enviar código para terceiros, sem custo por chamada, e sem depender de GPUs caras.
+Por padrão, utiliza o modelo **Big Pickle** gratuito via **OpenCode Zen** na nuvem — sem necessidade de GPU, sem custo por token. Também é possível usar modelos locais via Ollama (Qwen, Llama, etc.) alterando as variáveis de ambiente.
 
-Com **7 agentes especializados** organizados em uma esteira de processamento com **duplo loop de correção** (qualidade + segurança), ele é capaz de interpretar pedidos complexos, planejar, pesquisar, executar, consolidar, revisar e garantir a segurança das respostas — tudo isso em **~4 minutos** com modelos leves (1.5B).
+Com **7 agentes especializados** organizados em uma esteira de processamento com **duplo loop de correção** (qualidade + segurança), ele é capaz de interpretar pedidos complexos, planejar, pesquisar, executar, consolidar, revisar e garantir a segurança das respostas.
 
 ---
 
 ## 🏆 Benchmark de Performance
 
-| Modelo | Agentes | Tempo Total | RAM | GPU | Custo |
-|--------|---------|-------------|-----|-----|-------|
-| **Qwen 2.5 Coder 1.5B** | 7 | **~4 min** | ~4 GB | CPU-only | **Gratuito** |
-| Qwen 2.5 Coder 7B | 7 | ~30 min | ~12 GB | GPU recomendada | Gratuito |
-| Claude Code (Anthropic) | N/A | ~30 seg | N/A | Cloud | Pago por token |
+| Modelo | Agentes | Tempo Total | Infra | Custo |
+|--------|---------|-------------|-------|-------|
+| **Big Pickle (OpenCode Zen)** | 7 | **~30 seg** | Cloud (gratuita) | **Gratuito** |
+| Qwen 2.5 Coder 1.5B (Ollama) | 7 | ~4 min | CPU-only, ~4 GB RAM | Gratuito |
+| Qwen 2.5 Coder 7B (Ollama) | 7 | ~30 min | GPU recomendada | Gratuito |
+| Claude Code (Anthropic) | N/A | ~30 seg | Cloud | Pago por token |
 
-O modelo **1.5B** oferece o melhor custo-benefício para desenvolvimento local: executa em qualquer notebook sem GPU, consome pouca RAM, e entrega resultados técnicos sólidos em uma fração do tempo de modelos maiores.
+O modelo **Big Pickle** via OpenCode Zen oferece a melhor experiência: execução em nuvem sem consumir recursos locais, resposta rápida e custo zero.
 
 ---
 
@@ -71,13 +72,18 @@ Varredura rigorosa de segurança: detecta chaves vazadas, senhas hardcoded, SQL 
 ### Pré-requisitos
 
 - [Python 3.12+](https://www.python.org/downloads/)
-- [Ollama](https://ollama.com/download/windows)
-- Modelo Qwen 2.5 Coder 1.5B baixado via Ollama
+
+### Obter chave da API OpenCode Zen
+
+1. Acesse [opencode.ai](https://opencode.ai) e crie sua conta
+2. Gere uma API Key no painel do OpenCode Zen
+3. Defina a chave como variável de ambiente:
 
 ```powershell
-# Baixe o modelo
-ollama pull qwen2.5-coder:1.5b
+$env:OPENCODE_ZEN_KEY = "sua-chave-aqui"
 ```
+
+> Para persistir a chave, adicione ao seu perfil do PowerShell ou use o sistema de variáveis de ambiente do Windows.
 
 ### Passo a passo
 
@@ -93,7 +99,10 @@ python -m venv .venv
 # 3. Instale as dependências
 pip install -r requirements.txt
 
-# 4. Teste a execução direta
+# 4. Defina sua chave de API
+$env:OPENCODE_ZEN_KEY = "sua-chave-aqui"
+
+# 5. Execute
 python main.py
 ```
 
@@ -118,6 +127,30 @@ Após configurar, **feche e reabra o terminal**. Digite `rafael_code` em qualque
 
 ---
 
+## 🔧 Configuração
+
+O comportamento é controlado por variáveis de ambiente:
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `OPENCODE_ZEN_KEY` | `""` | Chave de API do OpenCode Zen |
+| `ZEN_API_URL` | `https://opencode.ai/zen/v1/responses` | Endpoint da API |
+| `ZEN_MODEL` | `big-pickle` | Modelo a ser usado |
+| `ZEN_TIMEOUT` | `600` | Timeout em segundos |
+| `TEMPERATURA_INICIAL` | `0.1` | Temperatura inicial do modelo |
+| `MAX_TENTATIVAS_MODELO` | `1` | Tentativas por agente |
+| `MAX_REPROVACAO_QUALIDADE` | `3` | Reprovações de qualidade |
+| `MAX_REPROVACAO_SEGURANCA` | `2` | Bloqueios de segurança |
+
+### Usar modelo local (Ollama)
+
+Se preferir rodar localmente com Ollama, reinstale as variáveis Ollama:
+
+```powershell
+$env:ZEN_API_URL = "http://localhost:11434/api/chat"
+$env:ZEN_MODEL = "qwen2.5-coder:1.5b"
+# Neste caso a OPENCODE_ZEN_KEY nao e necessaria
+```
 
 ---
 

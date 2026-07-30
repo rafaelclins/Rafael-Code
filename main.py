@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 
-from config import LOG_LEVEL, OLLAMA_MODEL, OLLAMA_TIMEOUT
+from config import LOG_LEVEL, ZEN_MODEL, ZEN_TIMEOUT
 from orquestrador import executar_pipeline
 
 logging.basicConfig(
@@ -22,13 +22,10 @@ def exemplo_interativo(diretorio_personalizado: str | None = None):
     print("=" * 60)
     print("  RAFAEL CODE - Multi-Agente (7 Agentes)")
     print("  Pipeline com duplo loop de correcao")
-    print(f"  Modelo: {OLLAMA_MODEL} via Ollama")
+    print(f"  Modelo: {ZEN_MODEL} via OpenCode Zen")
+    print(f"  URL: {os.getenv('ZEN_API_URL', 'https://opencode.ai/zen/v1/responses')}")
     print(f"  Diretorio: {os.getcwd()}")
-    print(f"  Timeout: {OLLAMA_TIMEOUT}s")
-    print("=" * 60)
-    print("  CPU lento? Troque para qwen2.5-coder:0.5b:")
-    print("  ollama pull qwen2.5-coder:0.5b")
-    print('  $env:OLLAMA_MODEL = "qwen2.5-coder:0.5b"')
+    print(f"  Timeout: {ZEN_TIMEOUT}s")
     print("=" * 60)
 
     pedido = input("\nDigite seu pedido (ou ENTER para usar exemplo): ").strip()
@@ -41,7 +38,7 @@ def exemplo_interativo(diretorio_personalizado: str | None = None):
         print(f"\nUsando exemplo: {pedido}")
 
     print("\n--- Iniciando pipeline ---\n")
-    resultado = executar_pipeline(pedido, aquecer=True)
+    resultado = executar_pipeline(pedido)
 
     print("\n" + "=" * 60)
     print("  RESULTADO FINAL")
@@ -53,7 +50,7 @@ def exemplo_interativo(diretorio_personalizado: str | None = None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Orquestrador Multi-Agente com Qwen 2.5 via Ollama"
+        description="Orquestrador Multi-Agente com Big Pickle via OpenCode Zen"
     )
     parser.add_argument(
         "--diretorio",

@@ -12,7 +12,7 @@ from agentes import (
     AGENTE_7_GUARDIAO,
 )
 from config import MAX_REPROVACAO_QUALIDADE, MAX_REPROVACAO_SEGURANCA
-from ollama_client import ErroModelo, aquecer_modelo, chamar_agente, criar_sessao
+from ollama_client import ErroModelo, chamar_agente
 from schemas import (
     AlinhadorOutput,
     AvaliadorOutput,
@@ -70,26 +70,21 @@ def _print_agente(numero: int, nome: str, status: str = "") -> None:
     _safe_print("-" * 55)
 
 
-def executar_pipeline(pedido_usuario: str, aquecer: bool = True) -> str:
+def executar_pipeline(pedido_usuario: str) -> str:
     try:
-        return _executar_pipeline_interno(pedido_usuario, aquecer)
+        return _executar_pipeline_interno(pedido_usuario)
     except ErroModelo as e:
-        msg = f"Erro no modelo local: {e.mensagem}"
+        msg = f"Erro na API Zen: {e.mensagem}"
         logger.error(msg)
         _safe_print("")
         _safe_print(f"  ERRO: {msg}")
         return msg
 
 
-def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str:
+def _executar_pipeline_interno(pedido_usuario: str) -> str:
     _print_separador("ORQUESTRADOR MULTI-AGENTE INICIADO")
     _safe_print(f"  Pedido: {pedido_usuario[:80]}{'...' if len(pedido_usuario) > 80 else ''}")
     logger.info("Iniciando pipeline multi-agente para o pedido do usuario.")
-
-    sessao = criar_sessao()
-    if aquecer:
-        _safe_print("  Aquecendo modelo...")
-        aquecer_modelo(sessao)
 
     _print_agente(1, "ALINHADOR (Orchestrator)")
     dados_agente_1 = chamar_agente(
