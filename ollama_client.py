@@ -46,18 +46,17 @@ def criar_sessao() -> requests.Session:
 
 
 def _extrair_texto(data: dict) -> str:
-    texto = (
-        data.get("output", [{}])[0]
-        .get("content", [{}])[0]
-        .get("text", "")
-    )
-    if not texto:
-        texto = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
-    return texto
+    output = data.get("output") or []
+    if output:
+        conteudos = output[0].get("content") or []
+        if conteudos:
+            return conteudos[0].get("text", "")
+
+    choices = data.get("choices") or []
+    if choices:
+        return (choices[0].get("message") or {}).get("content", "")
+
+    return ""
 
 
 def chamar_agente(
@@ -90,11 +89,11 @@ def chamar_agente(
                     {"role": "user", "content": f"Dados de Entrada:\n{entrada_usuario}"},
                 ],
                 "temperature": temp_atual,
-                "max_tokens": 1024,
+                "max_tokens": 4096,
             }
 
             resp = sessao.post(
-                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 120)
+                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 180)
             )
             resp.raise_for_status()
             texto_resposta = _extrair_texto(resp.json())
