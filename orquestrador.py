@@ -167,7 +167,7 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
 
         _print_agente(5, "CONSOLIDADOR (Synthesizer)")
         entrada_consolidador = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nCODIGO:\n{dados_agente_4}", 1500
+            f"PLANO:\n{dados_agente_2}\n\nCODIGO:\n{dados_agente_4}", 800
         )
         try:
             dados_agente_5 = chamar_agente(
