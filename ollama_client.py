@@ -89,11 +89,10 @@ def chamar_agente(
                     {"role": "user", "content": f"Dados de Entrada:\n{entrada_usuario}"},
                 ],
                 "temperature": temp_atual,
-                "max_tokens": 4096,
             }
 
             resp = sessao.post(
-                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 180)
+                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 300)
             )
             resp.raise_for_status()
             texto_resposta = _extrair_texto(resp.json())
