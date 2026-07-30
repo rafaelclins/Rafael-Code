@@ -118,18 +118,6 @@ Após configurar, **feche e reabra o terminal**. Digite `rafael_code` em qualque
 
 ---
 
-## 🎥 Demonstração
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=SEU_VIDEO_ID">
-    <img src="https://img.shields.io/badge/▶️%20Assistir%20Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Vídeo de demonstração no YouTube">
-  </a>
-</p>
-
-<!-- Substitua o link acima pelo URL do seu vídeo de demonstração. -->
-<!-- Exemplo de vídeo incorporado:
-[![Rafael Code em ação](https://img.youtube.com/vi/SEU_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=SEU_VIDEO_ID)
--->
 
 ---
 
