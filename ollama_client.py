@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from typing import Any, Dict, Optional
 
@@ -59,6 +60,16 @@ def _extrair_texto(data: dict) -> str:
     return ""
 
 
+def _log_progress(modelo: str, tentativa: int, total: int, stop: threading.Event) -> None:
+    elapsed = 0
+    while not stop.wait(timeout=30):
+        elapsed += 30
+        logger.info(
+            "Aguardando resposta | modelo=%s | tentativa %d/%d | ja se passaram %ds",
+            modelo, tentativa, total, elapsed,
+        )
+
+
 def chamar_agente(
     prompt_sistema: str,
     entrada_usuario: str,
@@ -89,12 +100,25 @@ def chamar_agente(
                     {"role": "user", "content": f"Dados de Entrada:\n{entrada_usuario}"},
                 ],
                 "temperature": temp_atual,
+                "max_tokens": 16384,
             }
 
-            resp = sessao.post(
-                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 300)
+            stop_watchdog = threading.Event()
+            watchdog = threading.Thread(
+                target=_log_progress,
+                args=(ZEN_MODEL, tentativa + 1, max_tentativas, stop_watchdog),
+                daemon=True,
             )
-            resp.raise_for_status()
+            watchdog.start()
+
+            try:
+                resp = sessao.post(
+                    ZEN_API_URL, json=payload, timeout=(30, 600)
+                )
+                resp.raise_for_status()
+            finally:
+                stop_watchdog.set()
+
             texto_resposta = _extrair_texto(resp.json())
 
             if not texto_resposta:
