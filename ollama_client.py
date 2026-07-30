@@ -45,6 +45,21 @@ def criar_sessao() -> requests.Session:
     return session
 
 
+def _extrair_texto(data: dict) -> str:
+    texto = (
+        data.get("output", [{}])[0]
+        .get("content", [{}])[0]
+        .get("text", "")
+    )
+    if not texto:
+        texto = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+    return texto
+
+
 def chamar_agente(
     prompt_sistema: str,
     entrada_usuario: str,
@@ -62,8 +77,8 @@ def chamar_agente(
 
     for tentativa in range(max_tentativas):
         temp_atual = temperatura + (tentativa * TEMPERATURA_INCREMENTO)
-        logger.debug(
-            "Tentativa %d/%d | temp=%.2f | modelo=%s",
+        logger.info(
+            "Agente chamado | tentativa %d/%d | temp=%.2f | modelo=%s",
             tentativa + 1, max_tentativas, temp_atual, ZEN_MODEL,
         )
 
@@ -75,22 +90,17 @@ def chamar_agente(
                     {"role": "user", "content": f"Dados de Entrada:\n{entrada_usuario}"},
                 ],
                 "temperature": temp_atual,
+                "max_tokens": 1024,
             }
 
-            resp = sessao.post(ZEN_API_URL, json=payload, timeout=ZEN_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
-            texto_resposta = (
-                data.get("output", [{}])[0]
-                .get("content", [{}])[0]
-                .get("text", "")
+            resp = sessao.post(
+                ZEN_API_URL, json=payload, timeout=min(ZEN_TIMEOUT, 120)
             )
+            resp.raise_for_status()
+            texto_resposta = _extrair_texto(resp.json())
+
             if not texto_resposta:
-                texto_resposta = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                )
+                raise ValueError("Resposta vazia da API Zen")
 
             dados_validados = extrair_e_validar_json(texto_resposta)
             esquema_pydantic(**dados_validados)
@@ -127,8 +137,8 @@ def chamar_agente(
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
 
-        except ValueError as e:
-            ultimo_erro = f"Erro de validacao na tentativa {tentativa + 1}: {e}"
+        except (ValueError, KeyError, IndexError, TypeError) as e:
+            ultimo_erro = f"Erro de processamento na tentativa {tentativa + 1}: {e}"
             logger.warning(ultimo_erro)
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
