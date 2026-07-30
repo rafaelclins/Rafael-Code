@@ -1,4 +1,6 @@
+import json
 import logging
+import sys
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -19,6 +21,8 @@ from config import (
 from parser_defensivo import extrair_e_validar_json
 
 logger = logging.getLogger(__name__)
+
+VERBOSE_MODE = False
 
 
 class ErroModelo(Exception):
@@ -61,13 +65,20 @@ def _extrair_texto(data: dict) -> str:
 
 
 def _log_progress(modelo: str, tentativa: int, total: int, stop: threading.Event) -> None:
-    elapsed = 0
-    while not stop.wait(timeout=30):
-        elapsed += 30
-        logger.info(
-            "Aguardando resposta | modelo=%s | tentativa %d/%d | ja se passaram %ds",
-            modelo, tentativa, total, elapsed,
-        )
+    spinner = r"-\|/"
+    i = 0
+    start = time.monotonic()
+    while not stop.wait(timeout=0.2):
+        elapsed = int(time.monotonic() - start)
+        i = (i + 1) % 4
+        msg = f"\r  {spinner[i]} Aguardando {modelo}... ({elapsed}s)"
+        print(msg, end="", file=sys.stderr, flush=True)
+        if elapsed > 0 and elapsed % 30 == 0:
+            logger.info(
+                "Aguardando resposta | modelo=%s | tentativa %d/%d | %ds",
+                modelo, tentativa, total, elapsed,
+            )
+    print("\r" + " " * 60 + "\r", end="", file=sys.stderr, flush=True)
 
 
 def chamar_agente(
@@ -119,7 +130,18 @@ def chamar_agente(
             finally:
                 stop_watchdog.set()
 
-            texto_resposta = _extrair_texto(resp.json())
+            raw_resp = resp.json()
+            if VERBOSE_MODE:
+                logger.info(
+                    "--- PAYLOAD ENVIADO ---\n%s",
+                    json.dumps(payload, indent=2, ensure_ascii=False),
+                )
+                logger.info(
+                    "--- RESPOSTA RECEBIDA ---\n%s",
+                    json.dumps(raw_resp, indent=2, ensure_ascii=False),
+                )
+
+            texto_resposta = _extrair_texto(raw_resp)
 
             if not texto_resposta:
                 raise ValueError("Resposta vazia da API Zen")

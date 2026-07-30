@@ -1,5 +1,7 @@
 import logging
 import os
+import sys
+from dataclasses import dataclass
 
 from agentes import (
     AGENTE_1_ALINHADOR,
@@ -24,6 +26,19 @@ from schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PipelineResult:
+    text: str
+    success: bool
+
+
+def _safe_print_err(texto: str) -> None:
+    try:
+        print(texto, file=sys.stderr)
+    except UnicodeEncodeError:
+        print(repr(texto)[1:-1], file=sys.stderr)
 
 
 def _ler_contexto_repositorio(max_caracteres: int = 1000) -> str:
@@ -70,15 +85,18 @@ def _print_agente(numero: int, nome: str, status: str = "") -> None:
     _safe_print("-" * 55)
 
 
-def executar_pipeline(pedido_usuario: str) -> str:
+def executar_pipeline(pedido_usuario: str) -> PipelineResult:
     try:
-        return _executar_pipeline_interno(pedido_usuario)
+        texto = _executar_pipeline_interno(pedido_usuario)
+        if texto.startswith("Falha na automacao"):
+            return PipelineResult(text=texto, success=False)
+        return PipelineResult(text=texto, success=True)
     except ErroModelo as e:
         msg = f"Erro na API Zen: {e.mensagem}"
         logger.error(msg)
-        _safe_print("")
-        _safe_print(f"  ERRO: {msg}")
-        return msg
+        _safe_print_err("")
+        _safe_print_err(f"  ERRO: {msg}")
+        return PipelineResult(text=msg, success=False)
 
 
 def _executar_pipeline_interno(pedido_usuario: str) -> str:
@@ -120,7 +138,7 @@ def _executar_pipeline_interno(pedido_usuario: str) -> str:
             _safe_print(f"  Passos planejados: {num_passos}")
         except ErroModelo as e:
             num_passos = 0
-            _safe_print(f"  A2 falhou: {e.mensagem[:80]}")
+            _safe_print_err(f"  A2 falhou: {e.mensagem[:80]}")
 
         if num_passos == 0:
             feedback_qualidade = "Planejador nao gerou um plano valido."
@@ -141,7 +159,7 @@ def _executar_pipeline_interno(pedido_usuario: str) -> str:
             _safe_print(f"  Fontes coletadas: {num_dados}")
         except ErroModelo as e:
             dados_agente_3 = {"dados_coletados": []}
-            _safe_print(f"  A3 falhou: {e.mensagem[:80]}")
+            _safe_print_err(f"  A3 falhou: {e.mensagem[:80]}")
 
         _print_agente(4, "EXECUTOR ESPECIALISTA")
         entrada_executor = _limitar(
@@ -155,7 +173,7 @@ def _executar_pipeline_interno(pedido_usuario: str) -> str:
             tamanho = len(dados_agente_4.get("rascunho_da_solucao", ""))
             _safe_print(f"  Rascunho gerado: {tamanho} caracteres")
         except ErroModelo as e:
-            _safe_print(f"  A4 falhou: {e.mensagem[:80]}")
+            _safe_print_err(f"  A4 falhou: {e.mensagem[:80]}")
             feedback_qualidade = "Executor nao conseguiu gerar codigo."
             tentativas_qualidade += 1
             continue
@@ -172,7 +190,7 @@ def _executar_pipeline_interno(pedido_usuario: str) -> str:
             documento_atual = dados_agente_5["documento_final_formatado"]
             _safe_print(f"  Documento formatado: {len(documento_atual)} caracteres")
         except ErroModelo as e:
-            _safe_print(f"  A5 falhou: {e.mensagem[:80]}")
+            _safe_print_err(f"  A5 falhou: {e.mensagem[:80]}")
             feedback_qualidade = "Consolidador nao conseguiu formatar a saida."
             tentativas_qualidade += 1
             continue
@@ -185,7 +203,7 @@ def _executar_pipeline_interno(pedido_usuario: str) -> str:
             logger.info("Agente 6 (Avaliador) concluido: %s", resultado_agente_6["status"])
             _safe_print(f"  Status: {resultado_agente_6['status']}")
         except ErroModelo as e:
-            _safe_print(f"  A6 falhou: {e.mensagem[:80]}")
+            _safe_print_err(f"  A6 falhou: {e.mensagem[:80]}")
             feedback_qualidade = "Avaliador nao conseguiu avaliar."
             tentativas_qualidade += 1
             continue
@@ -248,7 +266,7 @@ def _loop_seguranca(documento: str) -> str | None:
                 documento_limitado = _limitar(documento_atual, 1500)
                 logger.info("Consolidador refez o documento por seguranca.")
             except ErroModelo:
-                _safe_print("  A5 (refaz) falhou. Seguindo com o documento atual.")
+                _safe_print_err("  A5 (refaz) falhou. Seguindo com o documento atual.")
 
         _print_agente(7, "GUARDIAO DE SEGURANCA (Guardrail)")
         try:
@@ -276,7 +294,7 @@ def _loop_seguranca(documento: str) -> str | None:
             )
             logger.warning("Seguranca BLOQUEADO: %s", politica)
         except ErroModelo:
-            _safe_print("  A7 falhou. Seguindo para o proximo ciclo.")
+            _safe_print_err("  A7 falhou. Seguindo para o proximo ciclo.")
             feedback_seguranca = "Guardiao nao respondeu. Refazendo por seguranca."
 
         tentativas += 1
