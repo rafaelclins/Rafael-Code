@@ -35,45 +35,9 @@ O modelo **1.5B** oferece o melhor custo-benefício para desenvolvimento local: 
 
 ## 🧠 Arquitetura dos 7 Agentes
 
-O pipeline é executado em dois ciclos aninhados:
-
-```
-                    ┌──────────────────────────────────────┐
-                    │         CICLO DE QUALIDADE           │
-                    │  (até 3 tentativas de correção)     │
-                    └──────────────────────────────────────┘
-                                    │
-     ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-     │          │          │          │          │          │
-     ▼          ▼          ▼          ▼          ▼          ▼
-  ┌──────┐ ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ ┌────────┐
-  │  A1  │ │  A2   │ │   A3     │ │  A4   │ │   A5    │ │  A6   │
-  │Alinha│ │Planeja│ │Pesquisa  │ │Executa│ │Consolida│ │Avalia  │
-  └──────┘ └────────┘ └──────────┘ └────────┘ └──────────┘ └────────┘
-                                        │                       │
-                                        │                       ▼
-                                        │                 ┌──────────┐
-                                        │                 │ REPROVADO│
-                                        │                 │ (feedback)│
-                                        │                 └──────────┘
-                                        │                       │
-                                        ▼                       ▼
-                                  ┌──────────┐           ┌──────────┐
-                                  │  APROVADO│──────────▶│ CICLO DE │
-                                  └──────────┘           │ SEGURANÇA│
-                                                         └──────────┘
-                                                              │
-                                                         ┌────────┐
-                                                         │   A7   │
-                                                         │Guardião│
-                                                         └────────┘
-                                                         │       │
-                                                    SEGURO  BLOQUEADO
-                                                         │       │
-                                                         ▼       └──▶ A5 (refaz)
-                                                    ✅ RESPOSTA
-                                                       FINAL
-```
+<p align="center">
+  <img src="./img/fluxograma.png" alt="Fluxograma do Pipeline" width="500">
+</p>
 
 ### Agente 1 — Alinhador (Orchestrator)
 Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restrições técnicas e regras de negócio.
