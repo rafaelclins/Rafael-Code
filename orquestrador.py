@@ -1,4 +1,5 @@
 import logging
+import os
 
 from agentes import (
     AGENTE_1_ALINHADOR,
@@ -23,6 +24,21 @@ from schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _ler_contexto_repositorio(max_caracteres: int = 1000) -> str:
+    linhas: list[str] = []
+    for f in sorted(os.listdir(".")):
+        if not f.endswith(".py"):
+            continue
+        try:
+            with open(f, "r", encoding="utf-8") as arq:
+                conteudo = "".join(arq.readlines()[:50])
+                linhas.append(f"--- {f} ---\n{conteudo}")
+        except Exception:
+            pass
+    contexto = "\n\n".join(linhas)
+    return contexto[:max_caracteres]
 
 
 def _safe_print(texto: str) -> None:
@@ -101,8 +117,12 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
         _safe_print(f"  Passos planejados: {num_passos}")
 
         _print_agente(3, "PESQUISADOR (Research)")
+        contexto_repo = _ler_contexto_repositorio(max_caracteres=1000)
+        entrada_pesquisador = (
+            f"PLANO:\n{dados_agente_2}\n\nARQUIVOS DO PROJETO:\n{contexto_repo}"
+        )
         dados_agente_3 = chamar_agente(
-            AGENTE_3_PESQUISADOR, str(dados_agente_2), PesquisadorOutput
+            AGENTE_3_PESQUISADOR, entrada_pesquisador, PesquisadorOutput
         )
         logger.info("Agente 3 (Pesquisador) concluido.")
         num_dados = len(dados_agente_3.get("dados_coletados", []))
@@ -118,8 +138,11 @@ def _executar_pipeline_interno(pedido_usuario: str, aquecer: bool = True) -> str
         _safe_print(f"  Rascunho gerado: {tamanho} caracteres")
 
         _print_agente(5, "CONSOLIDADOR (Synthesizer)")
+        entrada_consolidador = (
+            f"PLANO:\n{dados_agente_2}\n\nCODIGO GERADO:\n{dados_agente_4}"
+        )
         dados_agente_5 = chamar_agente(
-            AGENTE_5_CONSOLIDADOR, str(dados_agente_4), ConsolidadorOutput
+            AGENTE_5_CONSOLIDADOR, entrada_consolidador, ConsolidadorOutput
         )
         logger.info("Agente 5 (Consolidador) concluido.")
         documento_atual = dados_agente_5["documento_final_formatado"]
