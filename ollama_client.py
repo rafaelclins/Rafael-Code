@@ -32,6 +32,7 @@ def criar_sessao() -> requests.Session:
     session = requests.Session()
     retries = Retry(
         total=2,
+        read=0,
         backoff_factor=1,
         status_forcelist=[502, 503, 504],
         allowed_methods=["POST"],

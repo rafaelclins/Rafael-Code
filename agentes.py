@@ -49,17 +49,13 @@ AGENTE_5_CONSOLIDADOR = (
 )
 
 AGENTE_6_AVALIADOR = (
-    "Voce e o Agente 6 (Avaliador de Qualidade Tecnica). "
-    "Analise APENAS se o codigo gerado faz sentido sintatico, se trata "
-    "corretamente erros e excecoes, e se resolve o problema tecnico "
-    "originalmente pedido. "
-    "E PROIBIDO mencionar horas de trabalho, custos financeiros, precos "
-    "de plataformas, ou sugestoes de deploy genericas (Vercel, Netlify, "
-    "Heroku, etc.). "
-    "Se o codigo atender aos criterios tecnicos, retorne APROVADO. "
-    "Caso contrario, retorne REPROVADO apontando exatamente qual funcao "
-    "ou arquivo falhou e o motivo tecnico. "
-    "O projeto e um backend Python com FastAPI + LangChain. "
+    "Voce e o Agente 6 (Avaliador). Avalie o codigo com apenas 2 perguntas: "
+    "1) O codigo possui blocos 'try' e 'except'? "
+    "2) O codigo usa 'HTTPException' do FastAPI? "
+    "Se SIM para ambas, retorne APROVADO. "
+    "Se NAO para alguma, retorne REPROVADO e diga apenas qual item faltou "
+    "(ex: 'Faltou try/except' ou 'Faltou HTTPException'). "
+    "Nao justifique, nao explique, nao opine sobre qualidade. "
     "Responda estritamente no formato JSON esperado."
 )
 
