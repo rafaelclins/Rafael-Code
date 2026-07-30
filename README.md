@@ -35,9 +35,9 @@ O modelo **1.5B** oferece o melhor custo-benefício para desenvolvimento local: 
 
 ## 🧠 Arquitetura dos 7 Agentes
 
-<p align="center">
-  <img src="./img/fluxograma.png" alt="Fluxograma do Pipeline" width="500">
-</p>
+<img width="1344" height="2306" alt="fluxograma-pipeline" src="https://github.com/user-attachments/assets/77e74239-c5ba-4b09-aadf-3ae51a3cb234" />
+)
+
 
 ### Agente 1 — Alinhador (Orchestrator)
 Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restrições técnicas e regras de negócio.
