@@ -2,8 +2,8 @@ import os
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
-OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
 
 MAX_TENTATIVAS_MODELO = int(os.getenv("MAX_TENTATIVAS_MODELO", "1"))
 MAX_REPROVACAO_QUALIDADE = int(os.getenv("MAX_REPROVACAO_QUALIDADE", "3"))

@@ -20,10 +20,15 @@ def exemplo_interativo(diretorio_personalizado: str | None = None):
         logger.info("Diretorio de trabalho alterado para: %s", diretorio_personalizado)
 
     print("=" * 60)
-    print("  ORQUESTRADOR MULTI-AGENTE (7 Agentes)")
+    print("  RAFAEL CODE - Multi-Agente (7 Agentes)")
     print("  Pipeline com duplo loop de correcao")
     print(f"  Modelo: {OLLAMA_MODEL} via Ollama")
     print(f"  Diretorio: {os.getcwd()}")
+    print(f"  Timeout: {OLLAMA_TIMEOUT}s")
+    print("=" * 60)
+    print("  CPU lento? Troque para qwen2.5-coder:0.5b:")
+    print("  ollama pull qwen2.5-coder:0.5b")
+    print('  $env:OLLAMA_MODEL = "qwen2.5-coder:0.5b"')
     print("=" * 60)
 
     pedido = input("\nDigite seu pedido (ou ENTER para usar exemplo): ").strip()
