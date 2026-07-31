@@ -34,6 +34,13 @@ class ExecutorOutput(BaseModel):
 
 class ConsolidadorOutput(BaseModel):
     documento_final_formatado: str = Field(default="", description="Documento em Markdown")
+    arquivos: List["ArquivoAlteracao"] = Field(default_factory=list, description="Arquivos a criar/modificar/excluir")
+
+
+class ArquivoAlteracao(BaseModel):
+    caminho: str = Field(default="", description="Caminho relativo do arquivo dentro do repositorio")
+    acao: str = Field(default="criar", description="criar, modificar ou excluir")
+    conteudo: str = Field(default="", description="Conteudo completo do arquivo")
 
 
 class AvaliadorOutput(BaseModel):

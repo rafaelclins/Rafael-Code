@@ -1,7 +1,6 @@
 import logging
-import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from agentes import (
     AGENTE_1_ALINHADOR,
@@ -21,6 +20,7 @@ from database import (
     ultimos_pedidos,
 )
 from ollama_client import ErroModelo, chamar_agente
+from repo_scanner import escanear_repositorio
 from schemas import (
     AlinhadorOutput,
     AvaliadorOutput,
@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 class PipelineResult:
     text: str
     success: bool
+    arquivos: list = field(default_factory=list)
+
+
+@dataclass
+class ResultadoPipeline:
+    texto: str
+    arquivos: list = field(default_factory=list)
 
 
 def _safe_print_err(texto: str) -> None:
@@ -45,21 +52,6 @@ def _safe_print_err(texto: str) -> None:
         print(texto, file=sys.stderr)
     except UnicodeEncodeError:
         print(repr(texto)[1:-1], file=sys.stderr)
-
-
-def _ler_contexto_repositorio(max_caracteres: int = 1000) -> str:
-    linhas: list[str] = []
-    for f in sorted(os.listdir(".")):
-        if not f.endswith(".py"):
-            continue
-        try:
-            with open(f, "r", encoding="utf-8") as arq:
-                conteudo = "".join(arq.readlines()[:50])
-                linhas.append(f"--- {f} ---\n{conteudo}")
-        except Exception:
-            pass
-    contexto = "\n\n".join(linhas)
-    return contexto[:max_caracteres]
 
 
 def _limitar(texto: str, max_caracteres: int) -> str:
@@ -93,10 +85,10 @@ def _print_agente(numero: int, nome: str, status: str = "") -> None:
 
 def executar_pipeline(pedido_usuario: str, headless: bool = False) -> PipelineResult:
     try:
-        texto = _executar_pipeline_interno(pedido_usuario, headless)
-        if texto.startswith("Falha na automação"):
-            return PipelineResult(text=texto, success=False)
-        return PipelineResult(text=texto, success=True)
+        res = _executar_pipeline_interno(pedido_usuario, headless)
+        if res.texto.startswith("Falha na automação"):
+            return PipelineResult(text=res.texto, success=False, arquivos=res.arquivos)
+        return PipelineResult(text=res.texto, success=True, arquivos=res.arquivos)
     except ErroModelo as e:
         msg = f"Erro na API Zen: {e.mensagem}"
         logger.error(msg)
@@ -105,7 +97,7 @@ def executar_pipeline(pedido_usuario: str, headless: bool = False) -> PipelineRe
         return PipelineResult(text=msg, success=False)
 
 
-def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> str:
+def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> ResultadoPipeline:
     _print_separador("ORQUESTRADOR MULTI-AGENTE INICIADO")
     _safe_print(f"  Pedido: {pedido_usuario[:80]}{'...' if len(pedido_usuario) > 80 else ''}")
     logger.info("Iniciando pipeline multi-agente para o pedido do usuário.")
@@ -130,6 +122,11 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
     salvar_log_agente(sessao_id, "Alinhador", str(dados_agente_1))
     logger.info("Agente 1 (Alinhador) concluído.")
     _safe_print(f"  Objetivo: {dados_agente_1.get('objetivo_principal', 'N/A')[:100]}")
+
+    mapa_repositorio = escanear_repositorio()
+    _safe_print(
+        f"  Mapa do repositório (Scanner AST) carregado: {len(mapa_repositorio)} caracteres"
+    )
 
     tentativas_qualidade = 0
     feedback_qualidade = ""
@@ -167,9 +164,8 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
             continue
 
         _print_agente(3, "PESQUISADOR (Research)")
-        contexto_repo = _ler_contexto_repositorio(max_caracteres=500)
         entrada_pesquisador = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nARQUIVOS:\n{contexto_repo}", 1000
+            f"PLANO:\n{dados_agente_2}\n\nMAPA DO REPOSITORIO:\n{mapa_repositorio}", 4000
         )
         try:
             dados_agente_3 = chamar_agente(
@@ -185,7 +181,9 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
 
         _print_agente(4, "EXECUTOR ESPECIALISTA")
         entrada_executor = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nPESQUISA:\n{dados_agente_3}", 1500
+            f"PLANO:\n{dados_agente_2}\n\nPESQUISA:\n{dados_agente_3}\n\n"
+            f"MAPA DO REPOSITORIO:\n{mapa_repositorio}",
+            5000,
         )
         try:
             dados_agente_4 = chamar_agente(
@@ -212,7 +210,9 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
             salvar_log_agente(sessao_id, "Consolidador", str(dados_agente_5))
             logger.info("Agente 5 (Consolidador) concluído.")
             documento_atual = dados_agente_5["documento_final_formatado"]
+            arquivos = dados_agente_5.get("arquivos", [])
             _safe_print(f"  Documento formatado: {len(documento_atual)} caracteres")
+            _safe_print(f"  Arquivos propostos: {len(arquivos)}")
         except ErroModelo as e:
             _safe_print_err(f"  A5 falhou: {e.mensagem[:80]}")
             feedback_qualidade = "Consolidador não conseguiu formatar a saída."
@@ -238,13 +238,15 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
             logger.warning("Qualidade REPROVADO. Feedback: %s", feedback_qualidade)
             _safe_print(f"  Motivo: {feedback_qualidade[:200]}")
             if headless:
-                return f"Falha na automação. Agente 6 (Avaliador) reprovou: {feedback_qualidade}"
+                return ResultadoPipeline(
+                    f"Falha na automação. Agente 6 (Avaliador) reprovou: {feedback_qualidade}"
+                )
             tentativas_qualidade += 1
             continue
 
         _safe_print("  Qualidade APROVADO! Iniciando verificação de segurança...")
 
-        resultado_final = _loop_seguranca(documento_atual, sessao_id, headless)
+        resultado_final = _loop_seguranca(documento_atual, sessao_id, headless, arquivos)
         if resultado_final is not None:
             _print_separador("PIPELINE CONCLUIDO COM SUCESSO")
             return resultado_final
@@ -264,14 +266,21 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> s
         f"Último feedback: {feedback_qualidade}"
     )
     logger.error(mensagem)
-    return mensagem
+    return ResultadoPipeline(mensagem)
 
 
-def _loop_seguranca(documento: str, sessao_id: int, headless: bool = False) -> str | None:
+def _loop_seguranca(
+    documento: str,
+    sessao_id: int,
+    headless: bool = False,
+    arquivos: list | None = None,
+) -> ResultadoPipeline | None:
     tentativas = 0
     feedback_seguranca = ""
     documento_atual = documento
     documento_limitado = _limitar(documento, 1500)
+    if arquivos is None:
+        arquivos = []
 
     while tentativas < MAX_REPROVACAO_SEGURANCA:
         _print_separador(
@@ -292,6 +301,9 @@ def _loop_seguranca(documento: str, sessao_id: int, headless: bool = False) -> s
                 salvar_log_agente(sessao_id, "Consolidador_Refaz", str(resultado_refeito))
                 documento_atual = resultado_refeito["documento_final_formatado"]
                 documento_limitado = _limitar(documento_atual, 1500)
+                novos_arquivos = resultado_refeito.get("arquivos")
+                if novos_arquivos:
+                    arquivos = novos_arquivos
                 logger.info("Consolidador refez o documento por segurança.")
             except ErroModelo:
                 _safe_print_err("  A5 (refaz) falhou. Seguindo com o documento atual.")
@@ -311,12 +323,16 @@ def _loop_seguranca(documento: str, sessao_id: int, headless: bool = False) -> s
             if resultado_agente_7["status_seguranca"] == "SEGURO":
                 logger.info("Documento 100% aprovado em qualidade e segurança!")
                 _safe_print("  Documento SEGURO. Liberado para o usuário!")
-                return resultado_agente_7["resposta_final_higienizada"]
+                return ResultadoPipeline(
+                    resultado_agente_7["resposta_final_higienizada"], arquivos
+                )
 
             politica = resultado_agente_7.get("politica_violada", "desconhecida")
             _safe_print(f"  Política violada: {politica}")
             if headless:
-                return f"Falha na automação. Agente 7 (Guardião) bloqueou: {politica}"
+                return ResultadoPipeline(
+                    f"Falha na automação. Agente 7 (Guardião) bloqueou: {politica}"
+                )
             feedback_seguranca = _limitar(
                 f"CORREÇÃO DE SEGURANÇA: {politica}. "
                 f"Detalhes: {resultado_agente_7['resposta_final_higienizada']}. "

@@ -26,8 +26,10 @@ Com **7 agentes especializados** organizados em uma esteira de processamento com
 - **7 agentes especializados** com direção tecnológica adaptativa: código simples em Python puro, sistemas corporativos ou RAG apenas quando fizer sentido técnico
 - **Duplo loop de correção**: qualidade (Agente 6) e segurança (Agente 7)
 - **Histórico de sessões com SQLite** (`rafael_code.db`): pedidos anteriores são injetados como contexto no Agente 1
+- **Scanner AST para RAG local** (`repo_scanner.py`): mapa das classes, funções e docstrings do projeto injetado nos Agentes 3 e 4
+- **Gravação segura no HD** (`--criar`): FileManager com validação de path traversal e backups automáticos em `.rafael_backups`
 - **Modo Headless** para CI/CD: sem `input()`, sem spinner, falha rápida com códigos de saída precisos
-- **Interface em Português do Brasil**: terminal configurado em UTF-8 puro e logs com acentuação correta
+- **Interface em Português do Brasil**: terminal configurado em UTF-8 puro, logs e prompts de sistema com acentuação correta
 - **Saída em JSON validada** por schemas Pydantic com parsing defensivo
 - **Cláusula de escape no Avaliador**: textos puros (sem código) são aprovados automaticamente
 
@@ -57,13 +59,13 @@ Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em
 Divide o problema em passos sequenciais com critérios de aceitação rigorosos. Planeja exclusivamente arquivos e funções a serem criados/modificados.
 
 ### Agente 3 — Pesquisador (Research)
-Simula pesquisa técnica sobre as bibliotecas e ferramentas necessárias, retornando dados factuais estruturados. A tecnologia é escolhida conforme o pedido, não imposta.
+Simula pesquisa técnica sobre as bibliotecas e ferramentas necessárias, retornando dados factuais estruturados. A tecnologia é escolhida conforme o pedido, não imposta. Recebe o **mapa do repositório (Scanner AST)** como contexto e propõe integração com o código já existente em vez de duplicação.
 
 ### Agente 4 — Executor (Coding Specialist)
-Gera o código completo: models, schemas Pydantic, endpoints, testes e arquivos de configuração — na stack mais adequada ao pedido.
+Gera o código completo: models, schemas Pydantic, endpoints, testes e arquivos de configuração — na stack mais adequada ao pedido. Reutiliza funções, classes e variáveis já existentes listadas no mapa do repositório fornecido na entrada.
 
 ### Agente 5 — Consolidador (Synthesizer)
-Organiza o código e a documentação gerados em uma saída Markdown técnica, clara e profissional, sempre com **ortografia e acentuação corretas em PT-BR**. Também atua em modo de correção de segurança.
+Organiza o código e a documentação gerados em uma saída Markdown técnica, clara e profissional, sempre com **ortografia e acentuação corretas em PT-BR**. Também lista os arquivos a criar ou modificar na chave `arquivos` (com `caminho`, `acao` e `conteudo` completo), habilitando a gravação segura com `--criar`. Atua ainda em modo de correção de segurança.
 
 ### Agente 6 — Avaliador / Crítico (QA)
 Analisa se o código gerado trata erros corretamente e resolve o problema técnico. Pode **reprovar** o ciclo, disparando uma nova iteração com feedback detalhado. Se o pedido **não envolver código** (apenas textos, relatórios ou Markdown), o checklist de segurança é ignorado e o documento é aprovado imediatamente.
@@ -117,9 +119,10 @@ python main.py
 ```powershell
 python main.py                                    # modo interativo
 python main.py --diretorio "C:\Projeto"           # analisa diretório específico
+python main.py --criar                            # grava os arquivos propostos no HD
 python main.py --headless                         # modo CI/CD sem interação
 python main.py --verbose                          # exibe JSON bruto das chamadas
-python main.py --version                          # exibe a versão (1.0.0)
+python main.py --version                          # exibe a versão (1.2.0)
 ```
 
 O pipeline retorna código de saída `0` em caso de sucesso total (Aprovado + Seguro) e `1` em caso de falha (Avaliador reprovou ou Guardião bloqueou).
@@ -193,6 +196,37 @@ Fluxo:
 
 ---
 
+## Gravação Segura no HD (`--criar`)
+
+O Agente 5 (Consolidador) pode listar arquivos a criar ou modificar na chave `arquivos` do JSON, com `caminho`, `acao` (criar/modificar) e `conteudo` completo. Com a flag `--criar`, o pipeline grava esses arquivos no disco de forma segura:
+
+- **Validação de caminho**: apenas arquivos dentro do repositório são aceitos — tentativas de `../` (path traversal) ou caminhos absolutos fora do projeto são bloqueadas
+- **Backup automático**: antes de sobrescrever ou excluir um arquivo, o original é copiado para `.rafael_backups/<TIMESTAMP>/`
+- **UTF-8 puro**: arquivos gravados com codificação `utf-8` e quebras de linha Unix
+- **Confirmação interativa**: pergunta `Deseja confirmar a gravação no HD? (S/n)`; no modo `--headless` a gravação é executada sem confirmação
+- **Relatório de alterações**: exibe o status (sucesso/erro) de cada arquivo ao final da gravação
+
+```powershell
+python main.py --criar
+```
+
+---
+
+## Scanner AST — RAG Local (`repo_scanner.py`)
+
+No início do pipeline, o repositório é escaneado e um **mapa estrutural** em Markdown é gerado para servir de contexto local (RAG) aos agentes:
+
+- Varre todos os arquivos `.py` com `ast.parse`, extraindo **classes, métodos e funções** com assinaturas e docstrings
+- Ignora `.git`, `.venv`, `__pycache__`, `.rafael_backups`, `.github` e pastas ocultas
+- O mapa é injetado no **Agente 3 (Pesquisador)** e no **Agente 4 (Executor)**, orientando a reutilização do código já existente em vez de duplicação
+- Arquivos com erro de sintaxe ou encoding inválido são ignorados com aviso no log
+- Sem dependências externas — apenas a biblioteca padrão (`ast`, `pathlib`)
+- Saída limitada a 8000 caracteres para não estourar o contexto do modelo
+
+Função pública: `escanear_repositorio(root_dir=".") -> str`.
+
+---
+
 ## Configuração
 
 O comportamento é controlado por variáveis de ambiente:
@@ -226,6 +260,8 @@ $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
 
 ### Pipeline
 
+O pipeline inicia com um **scan estrutural** do repositório (Scanner AST), gerando o mapa local que é injetado nos agentes de pesquisa e execução:
+
 1. **Alinhamento** → entrada do usuário é estruturada em JSON, com contexto dos últimos pedidos do SQLite
 2. **Planejamento** → plano de ação com passos e critérios
 3. **Pesquisa** → dados técnicos coletados sobre as bibliotecas adequadas ao pedido
@@ -241,6 +277,7 @@ $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
 - **Parsing defensivo**: extração de JSON por 3 estratégias (direto, profundidade, regex)
 - **Retry HTTP**: 502/503/504 com backoff exponencial
 - **Feedback cíclico**: falha de agente vira reprovação no loop de qualidade
+- **Path traversal bloqueado**: na gravação (`--criar`), arquivos fora do repositório ou com caminho absoluto são rejeitados pelo FileManager
 - **UTF-8 puro**: terminal forçado a UTF-8 para suportar acentos do Português do Brasil
 - **max_tokens alto**: respostas longas sem cortes no meio da frase
 
@@ -249,6 +286,8 @@ $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
 ## Roadmap
 
 - [x] Histórico de sessões com SQLite
+- [x] Scanner AST para RAG local (contexto do repositório nos agentes)
+- [x] Gravação segura no HD com backups automáticos (`--criar`)
 - [x] Modo headless para integração CI/CD
 - [x] GitHub Actions automatizado
 - [ ] Suporte a modelos 7B/14B para tarefas complexas

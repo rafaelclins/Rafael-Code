@@ -3,6 +3,7 @@ import logging
 import sys
 import threading
 import time
+import unicodedata
 from typing import Any, Dict, Optional
 
 import requests
@@ -118,20 +119,22 @@ def _enviar_e_extrair(
 
 
 def _detectar_agente(prompt: str) -> str:
-    prompt_lower = prompt.lower()
-    if "alinhador" in prompt_lower:
+    prompt_normalizado = unicodedata.normalize(
+        "NFKD", prompt.lower()
+    ).encode("ascii", "ignore").decode("ascii")
+    if "alinhador" in prompt_normalizado:
         return "Alinhador"
-    if "planejador" in prompt_lower:
+    if "planejador" in prompt_normalizado:
         return "Planejador"
-    if "pesquisador" in prompt_lower:
+    if "pesquisador" in prompt_normalizado:
         return "Pesquisador"
-    if "executor" in prompt_lower:
+    if "executor" in prompt_normalizado:
         return "Executor"
-    if "consolidador" in prompt_lower:
+    if "consolidador" in prompt_normalizado:
         return "Consolidador"
-    if "avaliador" in prompt_lower or "critico" in prompt_lower:
+    if "avaliador" in prompt_normalizado or "critico" in prompt_normalizado:
         return "Avaliador"
-    if "guardiao" in prompt_lower or "guardrail" in prompt_lower:
+    if "guardiao" in prompt_normalizado or "guardrail" in prompt_normalizado:
         return "Guardiao"
     return ""
 

@@ -4,6 +4,7 @@ import os
 import sys
 
 from config import APP_VERSION, LOG_LEVEL, ZEN_MODEL
+from file_manager import FileManager
 from orquestrador import PipelineResult, executar_pipeline
 
 logging.basicConfig(
@@ -49,6 +50,34 @@ def exemplo_interativo(diretorio: str | None = None) -> PipelineResult:
     return resultado
 
 
+def _gravar_arquivos(resultado: PipelineResult, confirmar: bool) -> bool:
+    if not resultado.success or not resultado.arquivos:
+        return True
+
+    if confirmar:
+        resposta = input("\nDeseja confirmar a gravação no HD? (S/n): ").strip().lower()
+        if resposta not in ("s", "sim", ""):
+            print("Gravação cancelada pelo usuário.")
+            return True
+
+    fm = FileManager()
+    relatorio = fm.aplicar_alteracoes(resultado.arquivos)
+
+    print("\n" + "=" * 55)
+    print("  RELATÓRIO DE ALTERAÇÕES NO HD")
+    print("=" * 55)
+    for item in relatorio:
+        marcador = "[OK]" if item["status"] == "OK" else "[ERRO]"
+        print(f"  {marcador} {item['acao'].upper():<10} {item['caminho'] or '(vazio)'}")
+        if item.get("backup"):
+            print(f"           backup: {item['backup']}")
+        if item.get("detalhe"):
+            print(f"           detalhe: {item['detalhe']}")
+    print("=" * 55)
+
+    return all(item["status"] == "OK" for item in relatorio)
+
+
 if __name__ == "__main__":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -77,6 +106,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Modo headless para CI/CD: sem input(), sem spinner, falha rapida.",
     )
+    parser.add_argument(
+        "--criar",
+        action="store_true",
+        help="Grava no HD os arquivos aprovados pelos agentes (com backup em .rafael_backups).",
+    )
     args = parser.parse_args()
 
     if args.version:
@@ -96,7 +130,13 @@ if __name__ == "__main__":
             "brechas de seguranca."
         )
         resultado = executar_pipeline(pedido, headless=True)
-        sys.exit(0 if resultado.success else 1)
+        gravacao_ok = True
+        if args.criar:
+            gravacao_ok = _gravar_arquivos(resultado, confirmar=False)
+        sys.exit(0 if (resultado.success and gravacao_ok) else 1)
     else:
         resultado = exemplo_interativo(diretorio=args.diretorio)
-        sys.exit(0 if resultado.success else 1)
+        gravacao_ok = True
+        if args.criar:
+            gravacao_ok = _gravar_arquivos(resultado, confirmar=True)
+        sys.exit(0 if (resultado.success and gravacao_ok) else 1)
