@@ -25,6 +25,8 @@ Com **7 agentes especializados** organizados em uma esteira de processamento com
 
 - **7 agentes especializados** com direção tecnológica adaptativa: código simples em Python puro, sistemas corporativos ou RAG apenas quando fizer sentido técnico
 - **Duplo loop de correção**: qualidade (Agente 6) e segurança (Agente 7)
+- **Modo interativo PLAN ↔ BUILD**: converse livremente com o Gerente em texto corrido (sem JSON) para refinar o plano e alterne para o modo BUILD com a tecla **TAB**, disparando a esteira completa A1→A7 com o contexto da conversa
+- **Renderização Markdown** das respostas: negrito, itálico, listas e blocos de código são exibidos estilizados nos painéis do Rich (Gerente, agentes e resultado final)
 - **Histórico de sessões com SQLite** (`rafael_code.db`): pedidos anteriores são injetados como contexto no Agente 1
 - **Scanner AST para RAG local** (`repo_scanner.py`): mapa das classes, funções e docstrings do projeto injetado nos Agentes 3 e 4
 - **Gravação segura no HD** (`--criar`): FileManager com validação de path traversal e backups automáticos em `.rafael_backups`
@@ -53,7 +55,7 @@ O modelo **Big Pickle** via OpenCode Zen oferece a melhor experiência: execuç�
 <img width="1344" height="2306" alt="fluxograma-pipeline" src="https://github.com/user-attachments/assets/77e74239-c5ba-4b09-aadf-3ae51a3cb234" />
 
 ### Agente 1 — Alinhador (Orchestrator)
-Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restrições técnicas e regras de negócio. Antes de processar, lê os **últimos 2 pedidos salvos no SQLite** para ganhar contexto histórico da conversa.
+Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restrições técnicas e regras de negócio. Antes de processar, injeta como contexto o **histórico da conversa PLAN** (quando o pipeline é disparado pelo modo BUILD) ou, na ausência dele, os **últimos 2 pedidos salvos no SQLite**.
 
 ### Agente 2 — Planejador (Planner)
 Divide o problema em passos sequenciais com critérios de aceitação rigorosos. Planeja exclusivamente arquivos e funções a serem criados/modificados.
@@ -117,15 +119,35 @@ python main.py
 ### Linha de comando
 
 ```powershell
-python main.py                                    # modo interativo
+python main.py                                    # modo interativo: chat PLAN + TAB para BUILD
 python main.py --diretorio "C:\Projeto"           # analisa diretório específico
 python main.py --criar                            # grava os arquivos propostos no HD
 python main.py --headless                         # modo CI/CD sem interação
-python main.py --verbose                          # exibe JSON bruto das chamadas
+python main.py --verbose                          # exibe os painéis dos agentes em Rich (Markdown)
 python main.py --version                          # exibe a versão (1.2.0)
 ```
 
 O pipeline retorna código de saída `0` em caso de sucesso total (Aprovado + Seguro) e `1` em caso de falha (Avaliador reprovou ou Guardião bloqueou).
+
+---
+
+## Modo Interativo (PLAN ↔ BUILD)
+
+O modo interativo (`python main.py`) funciona em duas fases alternadas pela tecla **TAB**:
+
+1. **PLAN** — o prompt exibe o indicador `[PLAN] >`. Você conversa livremente com o **Gerente** em texto corrido (sem JSON e sem invocar a esteira): refine requisitos, discuta ideias e pergunte quando o plano estiver pronto. O Gerente resume o plano proposto e sugere quando entrar no BUILD.
+2. **BUILD** — pressione **TAB** para alternar (indicador `[BUILD] >`) e **Enter** para disparar a esteira completa A1→A7. Todo o histórico da conversa PLAN é injetado como contexto no Agente 1 (Alinhador). Após o pipeline, o modo volta automaticamente para PLAN.
+
+Detalhes:
+
+- A barra inferior do prompt mostra o modo ativo e a dica de atalho (TAB alterna o modo).
+- Na primeira rodada, um Enter vazio usa um pedido de exemplo (portfólio React + Tailwind com deploy gratuito).
+- `Ctrl+C` / `Ctrl+D` encerram o programa a qualquer momento.
+- As respostas do Gerente, dos agentes e o resultado final são exibidos em **painéis Rich com Markdown renderizado** (negrito, itálico, listas e blocos de código).
+
+```powershell
+python main.py
+```
 
 ### Configurar comando global `rafael_code`
 
@@ -260,15 +282,22 @@ $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
 
 ### Pipeline
 
-O pipeline inicia com um **scan estrutural** do repositório (Scanner AST), gerando o mapa local que é injetado nos agentes de pesquisa e execução:
+O pipeline tem duas fases:
 
-1. **Alinhamento** → entrada do usuário é estruturada em JSON, com contexto dos últimos pedidos do SQLite
+- **Fase PLAN** — ocorre no modo interativo: o Gerente conversa com o usuário em texto corrido para refinar o plano, sem invocar os agentes da esteira.
+- **Fase BUILD** — dispara a esteira A1→A7 a partir de um pedido e do **contexto da conversa PLAN** acumulada (ou de um pedido direto via `--headless`).
+
+Na fase BUILD, a esteira inicia com um **scan estrutural** do repositório (Scanner AST), gerando o mapa local que é injetado nos agentes de pesquisa e execução:
+
+1. **Alinhamento** → entrada do usuário é estruturada em JSON, com o contexto da conversa PLAN ou os últimos pedidos do SQLite
 2. **Planejamento** → plano de ação com passos e critérios
 3. **Pesquisa** → dados técnicos coletados sobre as bibliotecas adequadas ao pedido
 4. **Execução** → código gerado pelo modelo
 5. **Consolidação** → código organizado em Markdown com PT-BR correto
 6. **Avaliação (QA)** → loop de qualidade: aprova ou reprova com feedback (aprovado imediato se não houver código)
 7. **Segurança (Guardrail)** → loop de segurança: libera ou bloqueia com correção
+
+Durante a esteira (com `--verbose`), as fases `[PLAN]`/`[BUILD]` e as respostas de cada agente são exibidas em painéis Rich com Markdown renderizado.
 
 ### Tratamento de erros
 
@@ -290,6 +319,8 @@ O pipeline inicia com um **scan estrutural** do repositório (Scanner AST), gera
 - [x] Gravação segura no HD com backups automáticos (`--criar`)
 - [x] Modo headless para integração CI/CD
 - [x] GitHub Actions automatizado
+- [x] Modo interativo PLAN ↔ BUILD com chat livre e alternância via TAB
+- [x] Renderização Markdown das respostas nos painéis do Rich
 - [ ] Suporte a modelos 7B/14B para tarefas complexas
 - [ ] Plugin para VS Code com atalho de teclado
 - [ ] Templates de prompt customizáveis

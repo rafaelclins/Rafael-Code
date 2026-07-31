@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -118,17 +119,102 @@ def _enviar_e_extrair(
         stop.set()
 
 
+def chamar_conversa(
+    prompt_sistema: str,
+    historico: list[dict],
+    entrada_usuario: str,
+    temperatura: Optional[float] = None,
+) -> str:
+    """Chat livre (sem schema JSON). Retorna o texto bruto do modelo."""
+    if temperatura is None:
+        temperatura = TEMPERATURA_INICIAL
+    sessao = criar_sessao()
+    mensagens: list[dict] = [{"role": "system", "content": prompt_sistema}]
+    mensagens.extend(historico or [])
+    mensagens.append({"role": "user", "content": entrada_usuario})
+
+    for tentativa in range(MAX_TENTATIVAS_MODELO):
+        temp_atual = temperatura + (tentativa * TEMPERATURA_INCREMENTO)
+        try:
+            payload = {
+                "model": ZEN_MODEL,
+                "messages": mensagens,
+                "temperature": temp_atual,
+                "max_tokens": 16384,
+            }
+            if VERBOSE_MODE:
+                logger.info(
+                    "--- PAYLOAD CHAT ---\n%s",
+                    json.dumps(payload, indent=2, ensure_ascii=False),
+                )
+            texto_resposta = _enviar_e_extrair(
+                sessao, payload, ZEN_MODEL, tentativa + 1, MAX_TENTATIVAS_MODELO
+            )
+            if texto_resposta:
+                if VERBOSE_MODE:
+                    logger.info("--- RESPOSTA CHAT ---\n%s", texto_resposta)
+                return texto_resposta
+            logger.warning("Resposta vazia no chat. Auto-retry com temperature=0.2...")
+            payload["temperature"] = 0.2
+            texto_resposta = _enviar_e_extrair(
+                sessao, payload, ZEN_MODEL, tentativa + 1, MAX_TENTATIVAS_MODELO
+            )
+            if texto_resposta:
+                return texto_resposta
+            raise ValueError("Resposta vazia da API Zen no chat")
+        except requests.Timeout:
+            logger.warning("Timeout no chat (tentativa %d).", tentativa + 1)
+            if tentativa < MAX_TENTATIVAS_MODELO - 1:
+                time.sleep(2 ** tentativa)
+        except requests.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "?"
+            logger.warning("HTTP %s no chat: %s", status, e)
+            if status in (400, 401, 404):
+                raise ErroModelo(
+                    f"API Zen retornou {status} no chat. "
+                    f"Verifique a URL '{ZEN_API_URL}' e a chave de API.",
+                    tentativa,
+                )
+            if tentativa < MAX_TENTATIVAS_MODELO - 1:
+                time.sleep(2 ** tentativa)
+        except requests.RequestException as e:
+            logger.warning("Erro de requisição no chat: %s", e)
+            if tentativa < MAX_TENTATIVAS_MODELO - 1:
+                time.sleep(2 ** tentativa)
+        except ValueError as e:
+            logger.warning("Erro de processamento no chat: %s", e)
+            if tentativa < MAX_TENTATIVAS_MODELO - 1:
+                time.sleep(2 ** tentativa)
+
+    raise ErroModelo(
+        f"Falha após {MAX_TENTATIVAS_MODELO} tentativas no chat.",
+        MAX_TENTATIVAS_MODELO - 1,
+    )
+
+
 def _detectar_agente(prompt: str) -> str:
     prompt_normalizado = unicodedata.normalize(
         "NFKD", prompt.lower()
     ).encode("ascii", "ignore").decode("ascii")
+    correspondencia = re.search(r"voce e o agente ([1-7])", prompt_normalizado)
+    if correspondencia:
+        numeros_para_nomes = {
+            1: "Alinhador",
+            2: "Planejador",
+            3: "Pesquisador",
+            4: "Executor",
+            5: "Consolidador",
+            6: "Avaliador",
+            7: "Guardiao",
+        }
+        return numeros_para_nomes[int(correspondencia.group(1))]
     if "alinhador" in prompt_normalizado:
         return "Alinhador"
-    if "planejador" in prompt_normalizado:
+    if "planejador" in prompt_normalizado or "planner" in prompt_normalizado:
         return "Planejador"
     if "pesquisador" in prompt_normalizado:
         return "Pesquisador"
-    if "executor" in prompt_normalizado:
+    if "executor" in prompt_normalizado or "builder" in prompt_normalizado:
         return "Executor"
     if "consolidador" in prompt_normalizado:
         return "Consolidador"

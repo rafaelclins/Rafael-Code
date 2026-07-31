@@ -2,15 +2,17 @@ import logging
 import sys
 from dataclasses import dataclass, field
 
+import ollama_client
 from agentes import (
     AGENTE_1_ALINHADOR,
-    AGENTE_2_PLANEJADOR,
     AGENTE_3_PESQUISADOR,
-    AGENTE_4_EXECUTOR,
     AGENTE_5_CONSOLIDADOR,
     AGENTE_5_REFAZ_POR_SEGURANCA,
     AGENTE_6_AVALIADOR,
     AGENTE_7_GUARDIAO,
+    AGENTE_BUILDER,
+    AGENTE_PLANNER,
+    PROMPT_CHAT_GERENTE,
 )
 from config import MAX_REPROVACAO_QUALIDADE, MAX_REPROVACAO_SEGURANCA
 from database import (
@@ -19,7 +21,8 @@ from database import (
     salvar_log_agente,
     ultimos_pedidos,
 )
-from ollama_client import ErroModelo, chamar_agente
+from file_manager import extrair_arquivos_do_texto
+from ollama_client import ErroModelo, chamar_agente, chamar_conversa
 from repo_scanner import escanear_repositorio
 from schemas import (
     AlinhadorOutput,
@@ -30,6 +33,7 @@ from schemas import (
     PesquisadorOutput,
     PlanejadorOutput,
 )
+from utils.formatador import exibir_fase, exibir_resposta_agente, limpar_texto
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +55,7 @@ def _safe_print_err(texto: str) -> None:
     try:
         print(texto, file=sys.stderr)
     except UnicodeEncodeError:
-        print(repr(texto)[1:-1], file=sys.stderr)
+        print(ascii(texto)[1:-1], file=sys.stderr)
 
 
 def _limitar(texto: str, max_caracteres: int) -> str:
@@ -64,7 +68,7 @@ def _safe_print(texto: str) -> None:
     try:
         print(texto)
     except UnicodeEncodeError:
-        print(repr(texto)[1:-1])
+        print(ascii(texto)[1:-1])
 
 
 def _print_separador(titulo: str) -> None:
@@ -83,12 +87,49 @@ def _print_agente(numero: int, nome: str, status: str = "") -> None:
     _safe_print("-" * 55)
 
 
-def executar_pipeline(pedido_usuario: str, headless: bool = False) -> PipelineResult:
+def _exibir_resposta_agente(nome: str, resposta: str) -> None:
+    if not getattr(ollama_client, "VERBOSE_MODE", False):
+        return
+    _safe_print("")
+    exibir_resposta_agente(nome, resposta)
+
+
+def _exibir_fase(fase: str, titulo: str, conteudo: str) -> None:
+    if not getattr(ollama_client, "VERBOSE_MODE", False):
+        return
+    _safe_print("")
+    exibir_fase(fase, titulo, conteudo)
+
+
+def conversar_gerente(entrada_usuario: str, historico_conversa: list[str]) -> str:
+    """Chat livre (fase PLAN): conversa com o Gerente, sem JSON e sem a esteira A1-A7."""
+    mensagens = []
+    for linha in historico_conversa:
+        if linha.startswith("Usuário: "):
+            mensagens.append({"role": "user", "content": linha[len("Usuário: "):]})
+        elif linha.startswith("Gerente: "):
+            mensagens.append({"role": "assistant", "content": linha[len("Gerente: "):]})
     try:
-        res = _executar_pipeline_interno(pedido_usuario, headless)
+        return chamar_conversa(PROMPT_CHAT_GERENTE, mensagens, entrada_usuario)
+    except ErroModelo as e:
+        return f"Erro ao conversar com o Gerente: {e.mensagem}"
+
+
+def executar_pipeline(
+    pedido_usuario: str,
+    headless: bool = False,
+    plano_consolidado: str = "",
+    contexto_conversa: str = "",
+) -> PipelineResult:
+    try:
+        res = _executar_pipeline_interno(
+            pedido_usuario, headless, plano_consolidado, contexto_conversa
+        )
         if res.texto.startswith("Falha na automação"):
             return PipelineResult(text=res.texto, success=False, arquivos=res.arquivos)
-        return PipelineResult(text=res.texto, success=True, arquivos=res.arquivos)
+        return PipelineResult(
+            text=limpar_texto(res.texto), success=True, arquivos=res.arquivos
+        )
     except ErroModelo as e:
         msg = f"Erro na API Zen: {e.mensagem}"
         logger.error(msg)
@@ -97,7 +138,12 @@ def executar_pipeline(pedido_usuario: str, headless: bool = False) -> PipelineRe
         return PipelineResult(text=msg, success=False)
 
 
-def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> ResultadoPipeline:
+def _executar_pipeline_interno(
+    pedido_usuario: str,
+    headless: bool = False,
+    plano_consolidado: str = "",
+    contexto_conversa: str = "",
+) -> ResultadoPipeline:
     _print_separador("ORQUESTRADOR MULTI-AGENTE INICIADO")
     _safe_print(f"  Pedido: {pedido_usuario[:80]}{'...' if len(pedido_usuario) > 80 else ''}")
     logger.info("Iniciando pipeline multi-agente para o pedido do usuário.")
@@ -105,7 +151,16 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
     init_db()
     historico = ultimos_pedidos(limite=2)
     sessao_id = criar_sessao(pedido_usuario)
-    if historico:
+    if contexto_conversa:
+        entrada_alinhador = _limitar(
+            "CONTEXTO DA CONVERSA PLAN (discussão, requisitos e plano combinado):\n"
+            f"{contexto_conversa}\n\nNOVO PEDIDO DO USUÁRIO:\n{pedido_usuario}",
+            3500,
+        )
+        _safe_print(
+            f"  Contexto da conversa PLAN injetado: {len(contexto_conversa)} caracteres"
+        )
+    elif historico:
         ctx = "\n".join(
             f"Historico da conversa anterior ({i+1}): {p}"
             for i, p in enumerate(historico)
@@ -115,13 +170,26 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
     else:
         entrada_alinhador = pedido_usuario
 
-    _print_agente(1, "ALINHADOR (Orchestrator)")
-    dados_agente_1 = chamar_agente(
-        AGENTE_1_ALINHADOR, entrada_alinhador, AlinhadorOutput
-    )
-    salvar_log_agente(sessao_id, "Alinhador", str(dados_agente_1))
-    logger.info("Agente 1 (Alinhador) concluído.")
-    _safe_print(f"  Objetivo: {dados_agente_1.get('objetivo_principal', 'N/A')[:100]}")
+    if plano_consolidado:
+        _safe_print(
+            "  Modo BUILD: plano consolidado da conversa PLAN recebido. "
+            "Pulando Alinhador e Planner."
+        )
+        logger.info("Modo BUILD: usando plano consolidado da conversa PLAN.")
+        dados_agente_1 = {
+            "objetivo_principal": pedido_usuario,
+            "restricoes_e_limites": [],
+            "regras_de_negocio": [],
+        }
+    else:
+        _print_agente(1, "ALINHADOR (Orchestrator)")
+        dados_agente_1 = chamar_agente(
+            AGENTE_1_ALINHADOR, entrada_alinhador, AlinhadorOutput
+        )
+        salvar_log_agente(sessao_id, "Alinhador", str(dados_agente_1))
+        logger.info("Agente 1 (Alinhador) concluído.")
+        _exibir_resposta_agente("Alinhador", str(dados_agente_1))
+        _safe_print(f"  Objetivo: {dados_agente_1.get('objetivo_principal', 'N/A')[:100]}")
 
     mapa_repositorio = escanear_repositorio()
     _safe_print(
@@ -136,27 +204,43 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
             f"CICLO DE QUALIDADE {tentativas_qualidade + 1}/{MAX_REPROVACAO_QUALIDADE}"
         )
 
-        entrada_planejador = _limitar(str(dados_agente_1), 2000)
-        if feedback_qualidade:
-            entrada_planejador += (
-                f"\n[CORREÇÃO OBRIGATÓRIA]: O avaliador reprovou o ciclo anterior "
-                f"pelo motivo: {feedback_qualidade}"
-            )
-            entrada_planejador = _limitar(entrada_planejador, 2500)
-            _safe_print(f"  Feedback de correção injetado: {feedback_qualidade[:100]}...")
+        if plano_consolidado:
+            plano_gerado = {
+                "conversa_plan": plano_consolidado,
+                "plano_de_acao": [
+                    {
+                        "passo": 1,
+                        "tarefa": plano_consolidado,
+                        "criterio_sucesso": "plano aprovado na conversa PLAN",
+                    }
+                ],
+            }
+            num_passos = 1
+            salvar_log_agente(sessao_id, "Planejador", plano_consolidado)
+            _safe_print("  Plano consolidado (PLAN) pronto para o Builder.")
+        else:
+            entrada_planejador = _limitar(str(dados_agente_1), 2000)
+            if feedback_qualidade:
+                entrada_planejador += (
+                    f"\n[CORREÇÃO OBRIGATÓRIA]: O avaliador reprovou o ciclo anterior "
+                    f"pelo motivo: {feedback_qualidade}"
+                )
+                entrada_planejador = _limitar(entrada_planejador, 2500)
+                _safe_print(f"  Feedback de correção injetado: {feedback_qualidade[:100]}...")
 
-        _print_agente(2, "PLANEJADOR (Planner)")
-        try:
-            dados_agente_2 = chamar_agente(
-                AGENTE_2_PLANEJADOR, entrada_planejador, PlanejadorOutput
-            )
-            salvar_log_agente(sessao_id, "Planejador", str(dados_agente_2))
-            logger.info("Agente 2 (Planejador) concluído.")
-            num_passos = len(dados_agente_2.get("plano_de_acao", []))
-            _safe_print(f"  Passos planejados: {num_passos}")
-        except ErroModelo as e:
-            num_passos = 0
-            _safe_print_err(f"  A2 falhou: {e.mensagem[:80]}")
+            _print_agente(2, "PLANNER (Planejamento)")
+            try:
+                plano_gerado = chamar_agente(
+                    AGENTE_PLANNER, entrada_planejador, PlanejadorOutput
+                )
+                salvar_log_agente(sessao_id, "Planejador", str(plano_gerado))
+                logger.info("Agente 2 (Planner) concluído.")
+                _exibir_fase("[PLAN]", "Plano gerado pelo Planner", str(plano_gerado))
+                num_passos = len(plano_gerado.get("plano_de_acao", []))
+                _safe_print(f"  Passos planejados: {num_passos}")
+            except ErroModelo as e:
+                num_passos = 0
+                _safe_print_err(f"  A2 falhou: {e.mensagem[:80]}")
 
         if num_passos == 0:
             feedback_qualidade = "Planejador não gerou um plano válido."
@@ -165,7 +249,7 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
 
         _print_agente(3, "PESQUISADOR (Research)")
         entrada_pesquisador = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nMAPA DO REPOSITORIO:\n{mapa_repositorio}", 4000
+            f"PLANO:\n{plano_gerado}\n\nMAPA DO REPOSITORIO:\n{mapa_repositorio}", 4000
         )
         try:
             dados_agente_3 = chamar_agente(
@@ -173,35 +257,52 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
             )
             salvar_log_agente(sessao_id, "Pesquisador", str(dados_agente_3))
             logger.info("Agente 3 (Pesquisador) concluído.")
+            _exibir_resposta_agente("Pesquisador", str(dados_agente_3))
             num_dados = len(dados_agente_3.get("dados_coletados", []))
             _safe_print(f"  Fontes coletadas: {num_dados}")
         except ErroModelo as e:
             dados_agente_3 = {"dados_coletados": []}
             _safe_print_err(f"  A3 falhou: {e.mensagem[:80]}")
 
-        _print_agente(4, "EXECUTOR ESPECIALISTA")
+        _print_agente(4, "BUILDER (Implementação)")
         entrada_executor = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nPESQUISA:\n{dados_agente_3}\n\n"
+            f"PLANO:\n{plano_gerado}\n\nPESQUISA:\n{dados_agente_3}\n\n"
             f"MAPA DO REPOSITORIO:\n{mapa_repositorio}",
             5000,
         )
-        try:
-            dados_agente_4 = chamar_agente(
-                AGENTE_4_EXECUTOR, entrada_executor, ExecutorOutput
+        if feedback_qualidade:
+            entrada_executor += (
+                "\n\n[CORREÇÃO OBRIGATÓRIA - FEEDBACK DO AGENTE 6 (QA)]: "
+                f"O Avaliador reprovou o ciclo anterior pelo motivo: {feedback_qualidade}\n"
+                "PRIORIDADE 100%: corrija exatamente este ponto e garanta blocos "
+                "`try:` e `except Exception as e:` explicitamente no código."
             )
-            salvar_log_agente(sessao_id, "Executor", str(dados_agente_4))
-            logger.info("Agente 4 (Executor) concluído.")
-            tamanho = len(dados_agente_4.get("rascunho_da_solucao", ""))
-            _safe_print(f"  Rascunho gerado: {tamanho} caracteres")
+            entrada_executor = _limitar(entrada_executor, 5000)
+            _safe_print(
+                f"  Feedback do Avaliador injetado no Builder: {feedback_qualidade[:100]}..."
+            )
+        try:
+            codigo_builder = chamar_agente(
+                AGENTE_BUILDER, entrada_executor, ExecutorOutput
+            )
+            salvar_log_agente(sessao_id, "Executor", str(codigo_builder))
+            logger.info("Agente 4 (Builder) concluído.")
+            _exibir_fase(
+                "[BUILD]",
+                "Código resultante do Builder",
+                codigo_builder.get("rascunho_da_solucao", ""),
+            )
+            tamanho = len(codigo_builder.get("rascunho_da_solucao", ""))
+            _safe_print(f"  Código gerado: {tamanho} caracteres")
         except ErroModelo as e:
             _safe_print_err(f"  A4 falhou: {e.mensagem[:80]}")
-            feedback_qualidade = "Executor não conseguiu gerar código."
+            feedback_qualidade = "Builder não conseguiu gerar código."
             tentativas_qualidade += 1
             continue
 
         _print_agente(5, "CONSOLIDADOR (Synthesizer)")
         entrada_consolidador = _limitar(
-            f"PLANO:\n{dados_agente_2}\n\nCODIGO:\n{dados_agente_4}", 800
+            f"PLANO:\n{plano_gerado}\n\nCODIGO:\n{codigo_builder}", 800
         )
         try:
             dados_agente_5 = chamar_agente(
@@ -209,6 +310,7 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
             )
             salvar_log_agente(sessao_id, "Consolidador", str(dados_agente_5))
             logger.info("Agente 5 (Consolidador) concluído.")
+            _exibir_resposta_agente("Consolidador", str(dados_agente_5))
             documento_atual = dados_agente_5["documento_final_formatado"]
             arquivos = dados_agente_5.get("arquivos", [])
             _safe_print(f"  Documento formatado: {len(documento_atual)} caracteres")
@@ -222,10 +324,15 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
         _print_agente(6, "AVALIADOR / CRITICO (QA)")
         try:
             resultado_agente_6 = chamar_agente(
-                AGENTE_6_AVALIADOR, _limitar(documento_atual, 1500), AvaliadorOutput
+                AGENTE_6_AVALIADOR,
+                _limitar(
+                    f"PLANO:\n{plano_gerado}\n\nDOCUMENTO:\n{documento_atual}", 1500
+                ),
+                AvaliadorOutput,
             )
             salvar_log_agente(sessao_id, "Avaliador", str(resultado_agente_6))
             logger.info("Agente 6 (Avaliador) concluído: %s", resultado_agente_6["status"])
+            _exibir_resposta_agente("Avaliador", str(resultado_agente_6))
             _safe_print(f"  Status: {resultado_agente_6['status']}")
         except ErroModelo as e:
             _safe_print_err(f"  A6 falhou: {e.mensagem[:80]}")
@@ -246,7 +353,9 @@ def _executar_pipeline_interno(pedido_usuario: str, headless: bool = False) -> R
 
         _safe_print("  Qualidade APROVADO! Iniciando verificação de segurança...")
 
-        resultado_final = _loop_seguranca(documento_atual, sessao_id, headless, arquivos)
+        resultado_final = _loop_seguranca(
+            documento_atual, sessao_id, headless, arquivos, plano_gerado
+        )
         if resultado_final is not None:
             _print_separador("PIPELINE CONCLUIDO COM SUCESSO")
             return resultado_final
@@ -274,11 +383,18 @@ def _loop_seguranca(
     sessao_id: int,
     headless: bool = False,
     arquivos: list | None = None,
+    plano: str = "",
 ) -> ResultadoPipeline | None:
     tentativas = 0
     feedback_seguranca = ""
     documento_atual = documento
-    documento_limitado = _limitar(documento, 1500)
+
+    def _contexto_guardiao() -> str:
+        if plano:
+            return _limitar(f"PLANO:\n{plano}\n\nDOCUMENTO:\n{documento_atual}", 1500)
+        return _limitar(documento_atual, 1500)
+
+    documento_limitado = _contexto_guardiao()
     if arquivos is None:
         arquivos = []
 
@@ -299,8 +415,9 @@ def _loop_seguranca(
                     AGENTE_5_REFAZ_POR_SEGURANCA, entrada_consolidador, ConsolidadorOutput
                 )
                 salvar_log_agente(sessao_id, "Consolidador_Refaz", str(resultado_refeito))
+                _exibir_resposta_agente("Consolidador", str(resultado_refeito))
                 documento_atual = resultado_refeito["documento_final_formatado"]
-                documento_limitado = _limitar(documento_atual, 1500)
+                documento_limitado = _contexto_guardiao()
                 novos_arquivos = resultado_refeito.get("arquivos")
                 if novos_arquivos:
                     arquivos = novos_arquivos
@@ -318,13 +435,16 @@ def _loop_seguranca(
                 "Agente 7 (Guardião) concluído: %s",
                 resultado_agente_7["status_seguranca"],
             )
+            _exibir_resposta_agente("Guardião", str(resultado_agente_7))
             _safe_print(f"  Status: {resultado_agente_7['status_seguranca']}")
 
             if resultado_agente_7["status_seguranca"] == "SEGURO":
                 logger.info("Documento 100% aprovado em qualidade e segurança!")
                 _safe_print("  Documento SEGURO. Liberado para o usuário!")
+                if not arquivos:
+                    arquivos = extrair_arquivos_do_texto(documento_atual)
                 return ResultadoPipeline(
-                    resultado_agente_7["resposta_final_higienizada"], arquivos
+                    limpar_texto(resultado_agente_7["resposta_final_higienizada"]), arquivos
                 )
 
             politica = resultado_agente_7.get("politica_violada", "desconhecida")

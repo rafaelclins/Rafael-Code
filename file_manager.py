@@ -1,9 +1,39 @@
 import logging
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_RE_BLOCO_CODIGO = re.compile(r"```([^\n`]*)\s*\n(.*?)```", re.DOTALL)
+_RE_CAMINHO_COMENTARIO = re.compile(r"^\s*#\s*([\w./\\-]+\.py)\s*$", re.MULTILINE)
+
+
+def extrair_arquivos_do_texto(texto: str) -> list[dict]:
+    if not texto:
+        return []
+    arquivos: dict[str, str] = {}
+    for bloco in _RE_BLOCO_CODIGO.finditer(texto):
+        info = bloco.group(1).strip()
+        conteudo = bloco.group(2)
+        caminho = ""
+        if ":" in info:
+            _, caminho = info.split(":", 1)
+        if not caminho:
+            comentario = _RE_CAMINHO_COMENTARIO.search(conteudo)
+            if comentario:
+                caminho = comentario.group(1)
+                conteudo = (
+                    conteudo[: comentario.start()] + conteudo[comentario.end() :]
+                )
+        if caminho:
+            caminho = caminho.strip().strip("`")
+            arquivos[caminho] = conteudo.strip("\n")
+    return [
+        {"caminho": caminho, "acao": "criar", "conteudo": conteudo}
+        for caminho, conteudo in arquivos.items()
+    ]
 
 
 class FileManager:
