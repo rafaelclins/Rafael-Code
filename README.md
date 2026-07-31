@@ -6,18 +6,24 @@
 
 <h1 align="center">Rafael Code</h1>
 <p align="center">
-  <em>Assistente multiagente de engenharia de software — cloud ou local, 100% open-source.</em>
+  <em>Framework de orquestração multiagente para engenharia de software assistida por IA — cloud ou local, 100% open-source.</em>
 </p>
 
 ---
 
 ## Introdução
 
-**Rafael Code** é um sistema multiagente inspirado no Claude Code da Anthropic, projetado para executar pipelines completos de engenharia de software usando modelos de linguagem.
+**Rafael Code** é um framework de orquestração multiagente para engenharia de software assistida por IA. Ele coordena um pipeline autônomo de agentes especializados — alinhamento, planejamento, pesquisa, execução, consolidação, revisão e segurança — que interpretam pedidos complexos e produzem software validado de ponta a ponta.
+
+A arquitetura foi projetada para autonomia, resiliência e controle de fluxo: cada etapa troca dados por esquemas validados, o pipeline se auto-corrige em duplo loop (qualidade + segurança) e o processo é rastreável e determinístico, com scanner AST, histórico persistente e integração contínua.
 
 Por padrão, utiliza o modelo **Big Pickle** gratuito via **OpenCode Zen** na nuvem — sem necessidade de GPU, sem custo por token. Também é possível usar modelos locais via Ollama (Qwen, Llama, etc.) alterando as variáveis de ambiente.
 
-Com **7 agentes especializados** organizados em uma esteira de processamento com **duplo loop de correção** (qualidade + segurança), ele é capaz de interpretar pedidos complexos, planejar, pesquisar, executar, consolidar, revisar e garantir a segurança das respostas.
+---
+
+## 🎯 Por que este projeto foi criado?
+
+O objetivo do Rafael Code é estudar e demonstrar arquiteturas multiagentes para engenharia de software assistida por IA. O projeto busca explorar como agentes especializados podem colaborar de forma autônoma para planejar, implementar, revisar e validar software utilizando modelos de linguagem locais e em nuvem, mantendo uma arquitetura modular, transparente e extensível com garantias de segurança e validação determinística (AST, CI/CD e histórico persistente).
 
 ---
 
