@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 class AlinhadorOutput(BaseModel):
@@ -38,10 +38,10 @@ class ConsolidadorOutput(BaseModel):
 
 class AvaliadorOutput(BaseModel):
     status: str = Field(default="APROVADO", description="APROVADO ou REPROVADO")
-    motivo_da_reprovacao: str = Field(default="", description="Motivo se REPROVADO. Vazio se APROVADO.")
+    motivo_da_reprovacao: Optional[str] = Field(default=None, description="Motivo se REPROVADO. None se APROVADO.")
 
 
 class GuardiaoOutput(BaseModel):
     status_seguranca: str = Field(default="SEGURO", description="SEGURO ou BLOQUEADO")
     resposta_final_higienizada: str = Field(default="", description="Texto em Markdown limpo")
-    politica_violada: str = Field(default="", description="Politica violada se BLOQUEADO")
+    politica_violada: Optional[str] = Field(default=None, description="Politica violada se BLOQUEADO. None se SEGURO.")

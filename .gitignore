@@ -43,3 +43,8 @@ tmp/
 # --- Local personal scripts (contain absolute paths with username) ---
 meus_agentes.bat
 rafael_code.bat
+
+# --- SQLite database (runtime data) ---
+rafael_code.db
+rafael_code.db-wal
+rafael_code.db-shm

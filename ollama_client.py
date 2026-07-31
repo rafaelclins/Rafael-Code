@@ -23,6 +23,7 @@ from parser_defensivo import extrair_e_validar_json
 logger = logging.getLogger(__name__)
 
 VERBOSE_MODE = False
+HEADLESS_MODE = False
 
 
 class ErroModelo(Exception):
@@ -64,21 +65,32 @@ def _extrair_texto(data: dict) -> str:
     return ""
 
 
-def _log_progress(modelo: str, tentativa: int, total: int, stop: threading.Event) -> None:
+def _agente_mensagem(agente: str) -> str:
+    if agente in ("Executor", "Consolidador"):
+        return "Pensando e gerando a solução técnica..."
+    if agente in ("Alinhador", "Planejador"):
+        return "Estruturando os passos e objetivos..."
+    if agente == "Pesquisador":
+        return "Pesquisando contexto no repositório..."
+    if agente in ("Avaliador", "Guardiao"):
+        return "Validando qualidade e segurança do código..."
+    return "Aguardando resposta do modelo..."
+
+
+def _log_progress(modelo: str, tentativa: int, total: int, stop: threading.Event, agente: str = "") -> None:
+    if HEADLESS_MODE:
+        return
     spinner = r"-\|/"
     i = 0
     start = time.monotonic()
+    mensagem = _agente_mensagem(agente)
     while not stop.wait(timeout=0.2):
         elapsed = int(time.monotonic() - start)
         i = (i + 1) % 4
-        msg = f"\r  {spinner[i]} Aguardando {modelo}... ({elapsed}s)"
-        print(msg, end="", file=sys.stderr, flush=True)
-        if elapsed > 0 and elapsed % 30 == 0:
-            logger.info(
-                "Aguardando resposta | modelo=%s | tentativa %d/%d | %ds",
-                modelo, tentativa, total, elapsed,
-            )
-    print("\r" + " " * 60 + "\r", end="", file=sys.stderr, flush=True)
+        sys.stdout.write(f"\r  {spinner[i]} {mensagem} ({elapsed}s)")
+        sys.stdout.flush()
+    sys.stdout.write("\r" + " " * 80 + "\r")
+    sys.stdout.flush()
 
 
 def _enviar_e_extrair(
@@ -87,10 +99,11 @@ def _enviar_e_extrair(
     modelo: str,
     tentativa: int,
     total: int,
+    agente: str = "",
 ) -> str:
     stop = threading.Event()
     t = threading.Thread(
-        target=_log_progress, args=(modelo, tentativa, total, stop), daemon=True,
+        target=_log_progress, args=(modelo, tentativa, total, stop, agente), daemon=True,
     )
     t.start()
     try:
@@ -98,10 +111,29 @@ def _enviar_e_extrair(
         resp.raise_for_status()
         raw = resp.json()
         if not isinstance(raw, dict):
-            raise ValueError(f"Resposta nao e dict: {type(raw).__name__}")
+            raise ValueError(f"Resposta não é dict: {type(raw).__name__}")
         return _extrair_texto(raw)
     finally:
         stop.set()
+
+
+def _detectar_agente(prompt: str) -> str:
+    prompt_lower = prompt.lower()
+    if "alinhador" in prompt_lower:
+        return "Alinhador"
+    if "planejador" in prompt_lower:
+        return "Planejador"
+    if "pesquisador" in prompt_lower:
+        return "Pesquisador"
+    if "executor" in prompt_lower:
+        return "Executor"
+    if "consolidador" in prompt_lower:
+        return "Consolidador"
+    if "avaliador" in prompt_lower or "critico" in prompt_lower:
+        return "Avaliador"
+    if "guardiao" in prompt_lower or "guardrail" in prompt_lower:
+        return "Guardiao"
+    return ""
 
 
 def chamar_agente(
@@ -116,6 +148,7 @@ def chamar_agente(
     if temperatura is None:
         temperatura = TEMPERATURA_INICIAL
 
+    nome_agente = _detectar_agente(prompt_sistema)
     sessao = criar_sessao()
     ultimo_erro = ""
 
@@ -144,7 +177,7 @@ def chamar_agente(
                 )
 
             texto_resposta = _enviar_e_extrair(
-                sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas,
+                sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas, agente=nome_agente,
             )
 
             if not texto_resposta:
@@ -153,11 +186,11 @@ def chamar_agente(
                 )
                 payload["temperature"] = 0.2
                 texto_resposta = _enviar_e_extrair(
-                    sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas,
+                    sessao, payload, ZEN_MODEL, tentativa + 1, max_tentativas, agente=nome_agente,
                 )
 
             if not texto_resposta:
-                raise ValueError("Resposta vazia da API Zen (mesmo apos auto-retry)")
+                raise ValueError("Resposta vazia da API Zen (mesmo após auto-retry)")
 
             if VERBOSE_MODE:
                 logger.info(
@@ -187,15 +220,15 @@ def chamar_agente(
                 )
             if status == 401:
                 raise ErroModelo(
-                    "API Zen retornou 401 (Nao Autorizado). "
-                    "Verifique se a variavel OPENCODE_ZEN_KEY esta definida corretamente.",
+                    "API Zen retornou 401 (Não Autorizado). "
+                    "Verifique se a variável OPENCODE_ZEN_KEY está definida corretamente.",
                     tentativa,
                 )
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
 
         except requests.RequestException as e:
-            ultimo_erro = f"Erro de requisicao na tentativa {tentativa + 1}: {e}"
+            ultimo_erro = f"Erro de requisição na tentativa {tentativa + 1}: {e}"
             logger.warning(ultimo_erro)
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
@@ -207,6 +240,6 @@ def chamar_agente(
                 time.sleep(2 ** tentativa)
 
     raise ErroModelo(
-        f"Falha apos {max_tentativas} tentativas. Ultimo erro: {ultimo_erro}",
+        f"Falha após {max_tentativas} tentativas. Último erro: {ultimo_erro}",
         max_tentativas - 1,
     )

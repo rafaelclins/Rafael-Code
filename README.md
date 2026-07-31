@@ -11,13 +11,25 @@
 
 ---
 
-## Introducao
+## Introdução
 
-**Rafael Code** e um sistema multiagente inspirado no Claude Code da Anthropic, projetado para executar pipelines completos de engenharia de software usando modelos de linguagem.
+**Rafael Code** é um sistema multiagente inspirado no Claude Code da Anthropic, projetado para executar pipelines completos de engenharia de software usando modelos de linguagem.
 
-Por padrao, utiliza o modelo **Big Pickle** gratuito via **OpenCode Zen** na nuvem — sem necessidade de GPU, sem custo por token. Tambem e possivel usar modelos locais via Ollama (Qwen, Llama, etc.) alterando as variaveis de ambiente.
+Por padrão, utiliza o modelo **Big Pickle** gratuito via **OpenCode Zen** na nuvem — sem necessidade de GPU, sem custo por token. Também é possível usar modelos locais via Ollama (Qwen, Llama, etc.) alterando as variáveis de ambiente.
 
-Com **7 agentes especializados** organizados em uma esteira de processamento com **duplo loop de correcao** (qualidade + seguranca), ele e capaz de interpretar pedidos complexos, planejar, pesquisar, executar, consolidar, revisar e garantir a seguranca das respostas.
+Com **7 agentes especializados** organizados em uma esteira de processamento com **duplo loop de correção** (qualidade + segurança), ele é capaz de interpretar pedidos complexos, planejar, pesquisar, executar, consolidar, revisar e garantir a segurança das respostas.
+
+---
+
+## Funcionalidades
+
+- **7 agentes especializados** com direção tecnológica adaptativa: código simples em Python puro, sistemas corporativos ou RAG apenas quando fizer sentido técnico
+- **Duplo loop de correção**: qualidade (Agente 6) e segurança (Agente 7)
+- **Histórico de sessões com SQLite** (`rafael_code.db`): pedidos anteriores são injetados como contexto no Agente 1
+- **Modo Headless** para CI/CD: sem `input()`, sem spinner, falha rápida com códigos de saída precisos
+- **Interface em Português do Brasil**: terminal configurado em UTF-8 puro e logs com acentuação correta
+- **Saída em JSON validada** por schemas Pydantic com parsing defensivo
+- **Cláusula de escape no Avaliador**: textos puros (sem código) são aprovados automaticamente
 
 ---
 
@@ -30,7 +42,7 @@ Com **7 agentes especializados** organizados em uma esteira de processamento com
 | Qwen 2.5 Coder 7B (Ollama) | 7 | ~30 min | GPU recomendada | Gratuito |
 | Claude Code (Anthropic) | N/A | ~30 seg | Cloud | Pago por token |
 
-O modelo **Big Pickle** via OpenCode Zen oferece a melhor experiencia: execucao em nuvem sem consumir recursos locais, resposta rapida e custo zero.
+O modelo **Big Pickle** via OpenCode Zen oferece a melhor experiência: execução em nuvem sem consumir recursos locais, resposta rápida e custo zero.
 
 ---
 
@@ -39,31 +51,31 @@ O modelo **Big Pickle** via OpenCode Zen oferece a melhor experiencia: execucao 
 <img width="1344" height="2306" alt="fluxograma-pipeline" src="https://github.com/user-attachments/assets/77e74239-c5ba-4b09-aadf-3ae51a3cb234" />
 
 ### Agente 1 — Alinhador (Orchestrator)
-Recebe o pedido bruto do usuario, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restricoes tecnicas e regras de negocio.
+Recebe o pedido bruto do usuário, remove ambiguidades e estrutura o problema em um formato padronizado. Extrai objetivo principal, restrições técnicas e regras de negócio. Antes de processar, lê os **últimos 2 pedidos salvos no SQLite** para ganhar contexto histórico da conversa.
 
 ### Agente 2 — Planejador (Planner)
-Divide o problema em passos sequenciais com criterios de aceitacao rigorosos. Planeja exclusivamente arquivos e funcoes a serem criados/modificados.
+Divide o problema em passos sequenciais com critérios de aceitação rigorosos. Planeja exclusivamente arquivos e funções a serem criados/modificados.
 
 ### Agente 3 — Pesquisador (Research)
-Simula pesquisa tecnica sobre as bibliotecas e ferramentas necessarias (FastAPI, LangChain, Pydantic, SQLAlchemy), retornando dados factuais estruturados.
+Simula pesquisa técnica sobre as bibliotecas e ferramentas necessárias, retornando dados factuais estruturados. A tecnologia é escolhida conforme o pedido, não imposta.
 
 ### Agente 4 — Executor (Coding Specialist)
-Gera o codigo completo: models, schemas Pydantic, endpoints FastAPI, chains LangChain, testes e arquivos de configuracao.
+Gera o código completo: models, schemas Pydantic, endpoints, testes e arquivos de configuração — na stack mais adequada ao pedido.
 
 ### Agente 5 — Consolidador (Synthesizer)
-Organiza o codigo e a documentacao gerados em uma saida Markdown tecnica, clara e profissional. Tambem atua em modo de correcao de seguranca.
+Organiza o código e a documentação gerados em uma saída Markdown técnica, clara e profissional, sempre com **ortografia e acentuação corretas em PT-BR**. Também atua em modo de correção de segurança.
 
-### Agente 6 — Avaliador / Critico (QA)
-Analisa exclusivamente se o codigo gerado faz sentido sintatico, trata erros corretamente e resolve o problema tecnico. Pode **reprovar** o ciclo, disparando uma nova iteracao com feedback detalhado.
+### Agente 6 — Avaliador / Crítico (QA)
+Analisa se o código gerado trata erros corretamente e resolve o problema técnico. Pode **reprovar** o ciclo, disparando uma nova iteração com feedback detalhado. Se o pedido **não envolver código** (apenas textos, relatórios ou Markdown), o checklist de segurança é ignorado e o documento é aprovado imediatamente.
 
-### Agente 7 — Guardiao de Seguranca (Guardrail)
-Varredura rigorosa de seguranca: detecta chaves vazadas, senhas hardcoded, SQL injection e alucinacoes perigosas. Pode **bloquear** a resposta e acionar o Consolidador para correcao.
+### Agente 7 — Guardião de Segurança (Guardrail)
+Varredura rigorosa de segurança: detecta chaves vazadas, senhas hardcoded, SQL injection e alucinações perigosas. Pode **bloquear** a resposta e acionar o Consolidador para correção.
 
 ---
 
-## Instalacao (Windows)
+## Instalação (Windows)
 
-### Pre-requisitos
+### Pré-requisitos
 
 - [Python 3.12+](https://www.python.org/downloads/)
 
@@ -71,18 +83,18 @@ Varredura rigorosa de seguranca: detecta chaves vazadas, senhas hardcoded, SQL i
 
 1. Acesse [opencode.ai](https://opencode.ai) e crie sua conta
 2. Gere uma API Key no painel do OpenCode Zen
-3. Defina a chave como variavel de ambiente:
+3. Defina a chave como variável de ambiente:
 
 ```powershell
 $env:OPENCODE_ZEN_KEY = "sua-chave-aqui"
 ```
 
-> Para persistir a chave, adicione ao seu perfil do PowerShell ou use o sistema de variaveis de ambiente do Windows.
+> Para persistir a chave, adicione ao seu perfil do PowerShell ou use o sistema de variáveis de ambiente do Windows.
 
 ### Passo a passo
 
 ```powershell
-# 1. Clone o repositorio
+# 1. Clone o repositório
 git clone https://github.com/rafaelclins/Rafael-Code.git
 cd Rafael-Code
 
@@ -90,7 +102,7 @@ cd Rafael-Code
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# 3. Instale as dependencias
+# 3. Instale as dependências
 pip install -r requirements.txt
 
 # 4. Defina sua chave de API
@@ -103,13 +115,14 @@ python main.py
 ### Linha de comando
 
 ```powershell
-python main.py                           # modo interativo
-python main.py --diretorio "C:\Projeto"  # analisa diretorio especifico
-python main.py --verbose                 # exibe JSON bruto das chamadas
-python main.py --version                 # exibe a versao (1.0.0)
+python main.py                                    # modo interativo
+python main.py --diretorio "C:\Projeto"           # analisa diretório específico
+python main.py --headless                         # modo CI/CD sem interação
+python main.py --verbose                          # exibe JSON bruto das chamadas
+python main.py --version                          # exibe a versão (1.0.0)
 ```
 
-O pipeline retorna codigo de saida `0` em caso de sucesso e `1` em caso de falha.
+O pipeline retorna código de saída `0` em caso de sucesso total (Aprovado + Seguro) e `1` em caso de falha (Avaliador reprovou ou Guardião bloqueou).
 
 ### Configurar comando global `rafael_code`
 
@@ -121,24 +134,70 @@ Para executar o Rafael Code de qualquer pasta no terminal:
 @echo off
 set "ORIGINAL_DIR=%CD%"
 cd /d "C:\caminho\para\Rafael-Code"
-"C:\caminho\para\python.exe" main.py --diretorio "%ORIGINAL_DIR%"
+"C:\caminho\para\python.exe" main.py --diretorio "%ORIGINAL_DIR%" %*
 cd /d "%ORIGINAL_DIR%"
 "@ | Out-File -FilePath "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps\rafael_code.bat" -Encoding ASCII
 ```
 
-> Ajuste os caminhos para refletir a localizacao do seu Python e do projeto.
+> Ajuste os caminhos para refletir a localização do seu Python e do projeto. O `%*` repassa todos os argumentos extras (como `--headless`) para o `main.py`.
 
-Apos configurar, **feche e reabra o terminal**. Digite `rafael_code` em qualquer pasta para iniciar o pipeline.
+Após configurar, **feche e reabra o terminal**. Digite `rafael_code` em qualquer pasta para iniciar o pipeline.
 
-> Um arquivo de exemplo `rafael_code.bat.example` esta incluido no repositorio.
+> Um arquivo de exemplo `rafael_code.bat.example` está incluído no repositório.
 
 ---
 
-## Configuracao
+## Modo Headless (CI/CD)
 
-O comportamento e controlado por variaveis de ambiente:
+O modo headless automatiza a verificação do repositório em servidores de integração contínua:
 
-| Variavel | Padrao | Descricao |
+```powershell
+python main.py --headless
+```
+
+Nesse modo:
+
+- **Não chama** `input()` — o pedido padrão é fixado como: *"Analise todos os arquivos de código deste diretório atual e valide se existem bugs de sintaxe, erros de lógica ou brechas de segurança."*
+- **Desativa o spinner** visual, exibindo apenas logs limpos e diretos
+- **Sucesso total** (Aprovado + Seguro) → `sys.exit(0)`
+- **Avaliador reprovou** ou **Guardião bloqueou** → `sys.exit(1)` imediato, sem retentativas, fazendo o servidor de CI/CD falhar e bloquear o Pull Request
+
+### GitHub Actions
+
+O repositório inclui o workflow `.github/workflows/rafael_code_ci.yml`, que roda em todo Push/Pull Request na branch `main`:
+
+1. Checkout do código (`actions/checkout@v4`)
+2. Python 3.12 no `ubuntu-latest` (`actions/setup-python@v5`)
+3. Instalação das dependências do `requirements.txt`
+4. Execução de `python main.py --headless` com a variável `OPENCODE_ZEN_KEY` vinda dos GitHub Secrets
+
+Para configurar no GitHub, adicione sua chave em **Settings → Secrets and variables → Actions** com o nome `OPENCODE_ZEN_KEY`.
+
+---
+
+## Histórico de Sessões (SQLite)
+
+O banco `rafael_code.db` é criado automaticamente na raiz do projeto com duas tabelas:
+
+| Tabela | Colunas |
+|--------|---------|
+| `sessoes` | `id`, `timestamp`, `pedido_usuario` |
+| `logs_agentes` | `id`, `sessao_id`, `agente`, `texto_gerado` |
+
+Fluxo:
+
+1. `init_db()` cria o banco e as tabelas ao iniciar o pipeline
+2. `criar_sessao(pedido_usuario)` salva o input do usuário no início do pipeline
+3. `salvar_log_agente(sessao_id, agente, texto_gerado)` registra o output JSON de cada agente assim que concluído
+4. `ultimos_pedidos(limite=2)` lê os últimos pedidos anteriores e os injeta no Agente 1 (Alinhador) como contexto histórico
+
+---
+
+## Configuração
+
+O comportamento é controlado por variáveis de ambiente:
+
+| Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `OPENCODE_ZEN_KEY` | `""` | Chave de API do OpenCode Zen |
 | `ZEN_API_URL` | `https://opencode.ai/zen/v1/responses` | Endpoint da API |
@@ -146,19 +205,19 @@ O comportamento e controlado por variaveis de ambiente:
 | `ZEN_TIMEOUT` | `600` | Timeout em segundos |
 | `TEMPERATURA_INICIAL` | `0.1` | Temperatura inicial do modelo |
 | `TEMPERATURA_INCREMENTO` | `0.2` | Incremento de temperatura a cada tentativa |
-| `LOG_LEVEL` | `INFO` | Nivel de log (DEBUG, INFO, WARNING, ERROR) |
+| `LOG_LEVEL` | `INFO` | Nível de log (DEBUG, INFO, WARNING, ERROR) |
 | `MAX_TENTATIVAS_MODELO` | `1` | Tentativas por agente |
-| `MAX_REPROVACAO_QUALIDADE` | `3` | Reprovacoes de qualidade |
-| `MAX_REPROVACAO_SEGURANCA` | `2` | Bloqueios de seguranca |
+| `MAX_REPROVACAO_QUALIDADE` | `3` | Reprovações de qualidade |
+| `MAX_REPROVACAO_SEGURANCA` | `2` | Bloqueios de segurança |
 
 ### Usar modelo local (Ollama)
 
-Se preferir rodar localmente com Ollama, reinstale as variaveis:
+Se preferir rodar localmente com Ollama, redefina as variáveis:
 
 ```powershell
 $env:ZEN_API_URL = "http://localhost:11434/api/chat"
 $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
-# Neste caso a OPENCODE_ZEN_KEY nao e necessaria
+# Neste caso a OPENCODE_ZEN_KEY não é necessária
 ```
 
 ---
@@ -167,37 +226,41 @@ $env:ZEN_MODEL = "qwen2.5-coder:1.5b"
 
 ### Pipeline
 
-1. **Alinhamento** → entrada do usuario e estruturada em JSON
-2. **Planejamento** → plano de acao com passos e criterios
-3. **Pesquisa** → dados tecnicos coletados sobre bibliotecas
-4. **Execucao** → codigo gerado pelo modelo
-5. **Consolidacao** → codigo organizado em Markdown
-6. **Avaliacao (QA)** → loop de qualidade: aprova ou reprova com feedback
-7. **Seguranca (Guardrail)** → loop de seguranca: libera ou bloqueia com correcao
+1. **Alinhamento** → entrada do usuário é estruturada em JSON, com contexto dos últimos pedidos do SQLite
+2. **Planejamento** → plano de ação com passos e critérios
+3. **Pesquisa** → dados técnicos coletados sobre as bibliotecas adequadas ao pedido
+4. **Execução** → código gerado pelo modelo
+5. **Consolidação** → código organizado em Markdown com PT-BR correto
+6. **Avaliação (QA)** → loop de qualidade: aprova ou reprova com feedback (aprovado imediato se não houver código)
+7. **Segurança (Guardrail)** → loop de segurança: libera ou bloqueia com correção
 
 ### Tratamento de erros
 
-- **Timeout progressivo**: ate 600s de espera com spinner mostrando o tempo decorrido
+- **Timeout progressivo**: até 600s de espera com spinner mostrando o tempo decorrido
 - **Auto-retry**: se a resposta vier vazia, re-tenta automaticamente com temperature=0.2
-- **Parsing defensivo**: extracao de JSON por 3 estrategias (direto, profundidade, regex)
+- **Parsing defensivo**: extração de JSON por 3 estratégias (direto, profundidade, regex)
 - **Retry HTTP**: 502/503/504 com backoff exponencial
-- **Feedback ciclico**: falha de agente vira reprovacao no loop de qualidade
+- **Feedback cíclico**: falha de agente vira reprovação no loop de qualidade
+- **UTF-8 puro**: terminal forçado a UTF-8 para suportar acentos do Português do Brasil
+- **max_tokens alto**: respostas longas sem cortes no meio da frase
 
 ---
 
 ## Roadmap
 
+- [x] Histórico de sessões com SQLite
+- [x] Modo headless para integração CI/CD
+- [x] GitHub Actions automatizado
 - [ ] Suporte a modelos 7B/14B para tarefas complexas
 - [ ] Plugin para VS Code com atalho de teclado
-- [ ] Historico de sessoes com SQLite
-- [ ] Modo headless para integracao CI/CD
-- [ ] Templates de prompt customizaveis
+- [ ] Templates de prompt customizáveis
+- [ ] Logs de agentes visualizáveis em uma página web
 
 ---
 
-## Licenca
+## Licença
 
-Distribuido sob a licenca MIT. Veja `LICENSE` para mais informacoes.
+Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
 
 ---
 
