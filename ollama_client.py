@@ -21,6 +21,7 @@ from config import (
     MAX_TENTATIVAS_MODELO,
     OLLAMA_API_URL,
     OLLAMA_MODEL,
+    OLLAMA_FALLBACK_ATIVADO,
 )
 from parser_defensivo import extrair_e_validar_json
 
@@ -149,6 +150,12 @@ def _tentar_fallback_local(
     temperatura: float,
     resposta_estava_vazia: bool,
 ) -> str:
+    if not OLLAMA_FALLBACK_ATIVADO:
+        raise ErroModelo(
+            "Fallback para modelo local desativado "
+            "(OLLAMA_FALLBACK_ATIVADO=false). Todas as tentativas na API Zen "
+            "foram esgotadas."
+        )
     if resposta_estava_vazia:
         logger.warning(
             "Resposta da API Zen vazia. Executando fallback para modelo local..."
@@ -161,6 +168,21 @@ def _tentar_fallback_local(
     if not texto.strip():
         raise ValueError("Resposta vazia do modelo local (Ollama)")
     return texto
+
+
+def _reforco_json(esquema_pydantic: Any) -> str:
+    try:
+        schema = json.dumps(
+            esquema_pydantic.model_json_schema(), ensure_ascii=False
+        )
+    except Exception:
+        schema = str(esquema_pydantic)
+    return (
+        "IMPORTANTE: a resposta anterior não veio em JSON válido. "
+        "Agora responda APENAS com um único bloco JSON puro e válido, "
+        "sem markdown, sem comentários e sem texto antes ou depois, "
+        "seguindo exatamente este schema:\n" + schema
+    )
 
 
 def chamar_conversa(
@@ -297,6 +319,7 @@ def chamar_agente(
     ]
     ultimo_erro = ""
     resposta_vazia = False
+    reforco_injetado = False
 
     for tentativa in range(max_tentativas):
         temp_atual = temperatura + (tentativa * TEMPERATURA_INCREMENTO)
@@ -380,6 +403,17 @@ def chamar_agente(
         except (ValueError, KeyError, IndexError, TypeError) as e:
             ultimo_erro = f"Erro de processamento na tentativa {tentativa + 1}: {e}"
             logger.warning(ultimo_erro)
+            if not reforco_injetado:
+                mensagens.append(
+                    {
+                        "role": "system",
+                        "content": _reforco_json(esquema_pydantic),
+                    }
+                )
+                reforco_injetado = True
+                logger.warning(
+                    "Mensagem de reforço JSON injetada para a próxima tentativa."
+                )
             if tentativa < max_tentativas - 1:
                 time.sleep(2 ** tentativa)
 

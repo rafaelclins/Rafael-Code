@@ -270,9 +270,10 @@ O comportamento é controlado por variáveis de ambiente:
 | `TEMPERATURA_INICIAL` | `0.1` | Temperatura inicial do modelo |
 | `TEMPERATURA_INCREMENTO` | `0.2` | Incremento de temperatura a cada tentativa |
 | `LOG_LEVEL` | `INFO` | Nível de log (DEBUG, INFO, WARNING, ERROR) |
-| `MAX_TENTATIVAS_MODELO` | `1` | Tentativas por agente |
+| `MAX_TENTATIVAS_MODELO` | `3` | Tentativas por agente na API Zen |
 | `MAX_REPROVACAO_QUALIDADE` | `3` | Reprovações de qualidade |
 | `MAX_REPROVACAO_SEGURANCA` | `2` | Bloqueios de segurança |
+| `OLLAMA_FALLBACK_ATIVADO` | `true` | Habilita o fallback para Ollama local após esgotar as tentativas na Zen |
 
 ### Usar modelo local (Ollama)
 
