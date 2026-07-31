@@ -265,6 +265,8 @@ O comportamento é controlado por variáveis de ambiente:
 | `ZEN_API_URL` | `https://opencode.ai/zen/v1/responses` | Endpoint da API |
 | `ZEN_MODEL` | `big-pickle` | Modelo a ser usado |
 | `ZEN_TIMEOUT` | `600` | Timeout em segundos |
+| `OLLAMA_API_URL` | `http://localhost:11434/api/chat` | Endpoint local usado no fallback automático |
+| `OLLAMA_MODEL` | `qwen2.5-coder` | Modelo local usado no fallback quando a API Zen falha |
 | `TEMPERATURA_INICIAL` | `0.1` | Temperatura inicial do modelo |
 | `TEMPERATURA_INCREMENTO` | `0.2` | Incremento de temperatura a cada tentativa |
 | `LOG_LEVEL` | `INFO` | Nível de log (DEBUG, INFO, WARNING, ERROR) |

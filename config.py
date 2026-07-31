@@ -5,6 +5,9 @@ ZEN_API_URL = os.getenv("ZEN_API_URL", "https://opencode.ai/zen/v1/responses")
 ZEN_MODEL = os.getenv("ZEN_MODEL", "big-pickle")
 ZEN_TIMEOUT = int(os.getenv("ZEN_TIMEOUT", "600"))
 
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/chat")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder")
+
 MAX_TENTATIVAS_MODELO = int(os.getenv("MAX_TENTATIVAS_MODELO", "1"))
 MAX_REPROVACAO_QUALIDADE = int(os.getenv("MAX_REPROVACAO_QUALIDADE", "3"))
 MAX_REPROVACAO_SEGURANCA = int(os.getenv("MAX_REPROVACAO_SEGURANCA", "2"))
